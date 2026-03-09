@@ -1,4 +1,5 @@
 @* Shared/AppSidebar.razor *@
+@using BlazoreTestPortal.Client.Models
 
 <aside class="sidebar @(Collapsed ? "sidebar-collapsed" : "") @(MobileOpen ? "sidebar-mobile-open" : "")">
 
@@ -16,117 +17,29 @@
         </button>
     </div>
 
-    @* ── Nav body ── *@
+    @* ── Nav body — rendered from NavGroups model ── *@
     <div class="sidebar-body">
+        @foreach (var group in NavGroups)
+        {
+            <div class="nav-group">
+                <p class="nav-label">@group.Label</p>
 
-        <div class="nav-group">
-            <p class="nav-label">OVERVIEW</p>
-
-            <div class="nav-flyout-wrap">
-                <NavLink href="/" Match="NavLinkMatch.All" class="nav-item" @onclick="OnClose">
-                    <span class="ni"><i class="fa-solid fa-house fa-fw"></i></span>
-                    <span class="nt">Home</span>
-                    <span class="chip-live">LIVE</span>
-                </NavLink>
-                <div class="flyout-panel">
-                    <span class="flyout-label">Home</span>
-                </div>
+                @foreach (var item in group.Items)
+                {
+                    @if (item.Children.Count > 0)
+                    {
+                        <SidebarNavGroup Item="@item"
+                                         Collapsed="@Collapsed"
+                                         OnClose="@OnClose" />
+                    }
+                    else
+                    {
+                        <SidebarNavItem Item="@item"
+                                        OnClose="@OnClose" />
+                    }
+                }
             </div>
-
-            <div class="nav-flyout-wrap">
-                <NavLink href="/insurance" class="nav-item" @onclick="OnClose">
-                    <span class="ni"><i class="fa-solid fa-file-shield fa-fw"></i></span>
-                    <span class="nt">Policies</span>
-                </NavLink>
-                <div class="flyout-panel">
-                    <span class="flyout-label">Policies</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="nav-group">
-            <p class="nav-label">INFRASTRUCTURE</p>
-
-            <div class="nav-flyout-wrap">
-                <button class="nav-item nav-parent @(_serversOpen ? "open" : "")"
-                        @onclick="ToggleServers">
-                    <span class="ni"><i class="fa-solid fa-layer-group fa-fw"></i></span>
-                    <span class="nt">Servers</span>
-                    <i class="fa-solid fa-chevron-down sb-chev ms-auto"></i>
-                </button>
-
-                <div class="subnav @(_serversOpen && !Collapsed ? "subnav-open" : "")">
-                    <NavLink href="/servers/database" class="sub-item" @onclick="OnClose">
-                        <i class="fa-solid fa-database fa-fw sub-icon"></i>
-                        <span class="nt">Database</span>
-                        <span class="status-dot dot-ok"></span>
-                    </NavLink>
-                    <NavLink href="/servers/network" class="sub-item" @onclick="OnClose">
-                        <i class="fa-solid fa-wifi fa-fw sub-icon"></i>
-                        <span class="nt">Network</span>
-                        <span class="status-dot dot-warn"></span>
-                    </NavLink>
-                    <NavLink href="/servers/compute" class="sub-item" @onclick="OnClose">
-                        <i class="fa-solid fa-memory fa-fw sub-icon"></i>
-                        <span class="nt">Compute</span>
-                        <span class="status-dot dot-ok"></span>
-                    </NavLink>
-                </div>
-
-                @* Flyout shown when collapsed *@
-                <div class="flyout-panel flyout-panel--group">
-                    <span class="flyout-group-title">Servers</span>
-                    <a href="/servers/database" class="flyout-item">
-                        <i class="fa-solid fa-database fa-fw"></i> Database
-                        <span class="flyout-dot dot-ok"></span>
-                    </a>
-                    <a href="/servers/network" class="flyout-item">
-                        <i class="fa-solid fa-wifi fa-fw"></i> Network
-                        <span class="flyout-dot dot-warn"></span>
-                    </a>
-                    <a href="/servers/compute" class="flyout-item">
-                        <i class="fa-solid fa-memory fa-fw"></i> Compute
-                        <span class="flyout-dot dot-ok"></span>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="nav-group">
-            <p class="nav-label">MANAGEMENT</p>
-
-            <div class="nav-flyout-wrap">
-                <NavLink href="/billing" class="nav-item" @onclick="OnClose">
-                    <span class="ni"><i class="fa-solid fa-credit-card fa-fw"></i></span>
-                    <span class="nt">Billing</span>
-                </NavLink>
-                <div class="flyout-panel">
-                    <span class="flyout-label">Billing</span>
-                </div>
-            </div>
-
-            <div class="nav-flyout-wrap">
-                <NavLink href="/users" class="nav-item" @onclick="OnClose">
-                    <span class="ni"><i class="fa-solid fa-user-group fa-fw"></i></span>
-                    <span class="nt">Users</span>
-                    <span class="chip-count">12</span>
-                </NavLink>
-                <div class="flyout-panel">
-                    <span class="flyout-label">Users</span>
-                </div>
-            </div>
-
-            <div class="nav-flyout-wrap">
-                <NavLink href="/security" class="nav-item" @onclick="OnClose">
-                    <span class="ni"><i class="fa-solid fa-lock fa-fw"></i></span>
-                    <span class="nt">Security</span>
-                </NavLink>
-                <div class="flyout-panel">
-                    <span class="flyout-label">Security</span>
-                </div>
-            </div>
-        </div>
-
+        }
     </div>
 
     @* ── Footer ── *@
@@ -157,13 +70,81 @@
     [Parameter] public bool          MobileOpen { get; set; }
     [Parameter] public EventCallback OnClose    { get; set; }
 
-    bool _serversOpen = false;
+    // ── Menu definition ──────────────────────────────────────────────────────
+    // Edit this list to add, remove, or reorder sidebar items.
+    // Children.Count > 0  → expandable group with flyout panel.
+    // Children.Count = 0  → simple leaf link with tooltip flyout.
+    // ─────────────────────────────────────────────────────────────────────────
+    static readonly List<NavGroup> NavGroups =
+    [
+        new NavGroup
+        {
+            Label = "OVERVIEW",
+            Items =
+            [
+                new NavItem
+                {
+                    Label      = "Home",
+                    Icon       = "fa-solid fa-house fa-fw",
+                    Href       = "/",
+                    ExactMatch = true,
+                    Badge      = new NavBadge { Type = "live", Text = "LIVE" }
+                },
+                new NavItem
+                {
+                    Label = "Policies",
+                    Icon  = "fa-solid fa-file-shield fa-fw",
+                    Href  = "/insurance"
+                }
+            ]
+        },
 
-    void ToggleServers()
-    {
-        if (Collapsed && !MobileOpen) return;
-        _serversOpen = !_serversOpen;
-    }
+        new NavGroup
+        {
+            Label = "INFRASTRUCTURE",
+            Items =
+            [
+                new NavItem
+                {
+                    Label    = "Servers",
+                    Icon     = "fa-solid fa-layer-group fa-fw",
+                    Children =
+                    [
+                        new NavItem { Label = "Database", Icon = "fa-solid fa-database fa-fw", Href = "/servers/database", StatusDot = "ok"   },
+                        new NavItem { Label = "Network",  Icon = "fa-solid fa-wifi fa-fw",     Href = "/servers/network",  StatusDot = "warn" },
+                        new NavItem { Label = "Compute",  Icon = "fa-solid fa-memory fa-fw",   Href = "/servers/compute",  StatusDot = "ok"   }
+                    ]
+                }
+            ]
+        },
+
+        new NavGroup
+        {
+            Label = "MANAGEMENT",
+            Items =
+            [
+                new NavItem
+                {
+                    Label = "Billing",
+                    Icon  = "fa-solid fa-credit-card fa-fw",
+                    Href  = "/billing"
+                },
+                new NavItem
+                {
+                    Label = "Users",
+                    Icon  = "fa-solid fa-user-group fa-fw",
+                    Href  = "/users",
+                    Badge = new NavBadge { Type = "count", Text = "12" }
+                },
+                new NavItem
+                {
+                    Label = "Security",
+                    Icon  = "fa-solid fa-lock fa-fw",
+                    Href  = "/security"
+                }
+            ]
+        }
+    ];
 }
 
 <style>
@@ -171,7 +152,6 @@
        AppSidebar — scoped styles
     ══════════════════════════════════════════ */
 
-    /* ── Shell ── */
     .sidebar {
         width: var(--sidebar-width);
         flex-shrink: 0;
@@ -194,65 +174,39 @@
         pointer-events: none;
     }
 
-    .sidebar-collapsed {
-        width: var(--sidebar-width-collapsed);
-        overflow: visible;
-    }
+    .sidebar-collapsed { width: var(--sidebar-width-collapsed); overflow: visible; }
 
-    /* ── Header ── */
     .sidebar-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 14px;
-        height: var(--topbar-height);
-        flex-shrink: 0;
-        position: relative;
-        z-index: 5;
+        display: flex; align-items: center; gap: 10px;
+        padding: 0 14px; height: var(--topbar-height);
+        flex-shrink: 0; position: relative; z-index: 5;
         background: var(--sb-bg);
     }
 
     .sb-logo {
-        width: 36px; height: 36px;
-        border-radius: var(--radius);
+        width: 36px; height: 36px; border-radius: var(--radius);
         background: var(--accent);
         display: flex; align-items: center; justify-content: center;
         color: #fff; font-size: 15px; flex-shrink: 0;
         box-shadow: 0 2px 10px var(--accent-glow);
     }
 
-    .sb-brand {
-        display: flex; flex-direction: column;
-        overflow: hidden; max-width: 160px;
-        transition: opacity var(--ease), max-width var(--ease);
-    }
-
-    .sb-brand-name {
-        font-family: var(--font-brand);
-        font-size: 16px; font-weight: 600;
-        color: #fff; white-space: nowrap; line-height: 1.2;
-    }
-
-    .sb-brand-tag {
-        font-size: 9.5px; font-weight: 700;
-        letter-spacing: 1.6px;
-        color: var(--sb-label); white-space: nowrap;
-    }
+    .sb-brand { display: flex; flex-direction: column; overflow: hidden; max-width: 160px; transition: opacity var(--ease), max-width var(--ease); }
+    .sb-brand-name { font-family: var(--font-brand); font-size: 16px; font-weight: 600; color: #fff; white-space: nowrap; line-height: 1.2; }
+    .sb-brand-tag  { font-size: 9.5px; font-weight: 700; letter-spacing: 1.6px; color: var(--sb-label); white-space: nowrap; }
 
     .sb-close-btn {
         display: none; margin-left: auto;
-        background: none; border: none;
-        color: var(--sb-text); font-size: 16px; cursor: pointer;
+        background: none; border: none; color: var(--sb-text);
+        font-size: 16px; cursor: pointer;
         width: 30px; height: 30px;
         align-items: center; justify-content: center;
         border-radius: var(--radius);
         transition: background var(--ease), color var(--ease);
         flex-shrink: 0;
     }
-
     .sb-close-btn:hover { background: var(--sb-hover); color: #fff; }
 
-    /* ── Body ── */
     .sidebar-body {
         flex: 1; overflow-y: auto; overflow-x: hidden;
         padding: 8px 10px; scrollbar-width: none;
@@ -260,24 +214,13 @@
         background: var(--sb-bg);
         transition: padding var(--ease);
     }
-
     .sidebar-body::-webkit-scrollbar { display: none; }
     .sidebar-collapsed .sidebar-body { padding: 8px 0; overflow: visible; }
 
-    /* ── Nav groups ── */
     .nav-group { margin-bottom: 4px; }
-
-    .nav-label {
-        font-size: 9.5px; font-weight: 700;
-        letter-spacing: 1.5px; color: var(--sb-label);
-        padding: 10px 10px 4px; white-space: nowrap;
-        overflow: hidden;
-    }
-
-    /* ── Flyout wrapper ── */
+    .nav-label { font-size: 9.5px; font-weight: 700; letter-spacing: 1.5px; color: var(--sb-label); padding: 10px 10px 4px; white-space: nowrap; overflow: hidden; }
     .nav-flyout-wrap { position: relative; }
 
-    /* ── Nav items ── */
     .nav-item {
         display: flex; align-items: center; gap: 10px;
         width: 100%; padding: 9px 10px;
@@ -292,121 +235,54 @@
         transition: background var(--ease), color var(--ease);
     }
 
-    .nav-item:hover             { background: var(--sb-hover); color: var(--sb-text-active); }
-    .nav-item:hover .ni         { color: var(--sb-text-active); }
-    .nav-item.active            { background: var(--sb-active-bg); color: var(--sb-text-active); }
-    .nav-item.active .ni        { color: var(--accent); }
-    .nav-parent.open            { background: var(--sb-hover); color: var(--sb-text-active); }
+    .nav-item:hover          { background: var(--sb-hover); color: var(--sb-text-active); }
+    .nav-item:hover .ni      { color: var(--sb-text-active); }
+    .nav-item.active         { background: var(--sb-active-bg); color: var(--sb-text-active); }
+    .nav-item.active .ni     { color: var(--accent); }
+    .nav-parent.open         { background: var(--sb-hover); color: var(--sb-text-active); }
 
     .nav-item.active::before {
-        content: '';
-        position: absolute; left: 0; top: 5px; bottom: 5px;
-        width: 3px; border-radius: 0 3px 3px 0;
-        background: var(--accent);
+        content: ''; position: absolute; left: 0; top: 5px; bottom: 5px;
+        width: 3px; border-radius: 0 3px 3px 0; background: var(--accent);
     }
 
-    .ni {
-        width: 20px; min-width: 20px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 13px; color: var(--sb-icon);
-        flex-shrink: 0; transition: color var(--ease);
-    }
-
+    .ni { width: 20px; min-width: 20px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--sb-icon); flex-shrink: 0; transition: color var(--ease); }
     .nt { white-space: nowrap; overflow: hidden; flex: 1; }
 
-    .chip-live {
-        font-size: 9px; font-weight: 700; letter-spacing: .8px;
-        padding: 2px 6px; border-radius: 20px;
-        background: rgba(4,89,90,.30); color: #4ecdc4;
-        flex-shrink: 0; white-space: nowrap;
-    }
-
-    .chip-count {
-        font-size: 10px; font-weight: 700;
-        padding: 1px 7px; border-radius: 20px;
-        background: var(--accent); color: #fff;
-        min-width: 20px; text-align: center;
-        flex-shrink: 0; white-space: nowrap;
-    }
-
-    .sb-chev {
-        font-size: 10px; color: var(--sb-label); flex-shrink: 0;
-        transition: transform var(--ease), color var(--ease);
-    }
-
+    .chip-live  { font-size: 9px; font-weight: 700; letter-spacing: .8px; padding: 2px 6px; border-radius: 20px; background: rgba(4,89,90,.30); color: #4ecdc4; flex-shrink: 0; white-space: nowrap; }
+    .chip-count { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 20px; background: var(--accent); color: #fff; min-width: 20px; text-align: center; flex-shrink: 0; white-space: nowrap; }
+    .sb-chev    { font-size: 10px; color: var(--sb-label); flex-shrink: 0; transition: transform var(--ease), color var(--ease); }
     .nav-parent.open .sb-chev { transform: rotate(180deg); color: var(--sb-text-active); }
 
-    /* ── Subnav ── */
-    .subnav {
-        max-height: 0; overflow: hidden;
-        transition: max-height .28s cubic-bezier(.4,0,.2,1);
-        margin-left: 14px; padding-left: 10px;
-        border-left: 1px solid var(--sb-border);
-    }
-
+    .subnav { max-height: 0; overflow: hidden; transition: max-height .28s cubic-bezier(.4,0,.2,1); margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--sb-border); }
     .subnav-open { max-height: 200px; }
 
-    .sub-item {
-        display: flex; align-items: center; gap: 9px;
-        padding: 7px 10px; border-radius: var(--radius);
-        color: var(--sb-text); text-decoration: none;
-        font-size: 13px; font-weight: 500;
-        margin-bottom: 1px; white-space: nowrap;
-        transition: background var(--ease), color var(--ease);
-    }
-
+    .sub-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius); color: var(--sb-text); text-decoration: none; font-size: 13px; font-weight: 500; margin-bottom: 1px; white-space: nowrap; transition: background var(--ease), color var(--ease); }
     .sub-item:hover  { background: var(--teal-faint); color: var(--sb-text-active); }
     .sub-item.active { background: var(--sb-active-bg); color: var(--sb-text-active); }
-
     .sub-icon { font-size: 11px; color: var(--sb-icon); width: 16px; min-width: 16px; flex-shrink: 0; }
 
     .status-dot { width: 7px; height: 7px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
-    .dot-ok     { background: var(--teal); box-shadow: 0 0 6px var(--teal-glow); }
-    .dot-warn   { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,.5); }
+    .dot-ok  { background: var(--teal); box-shadow: 0 0 6px var(--teal-glow); }
+    .dot-warn{ background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,.5); }
 
-    /* ── Footer ── */
-    .sidebar-footer {
-        border-top: 1px solid var(--sb-border);
-        padding: 12px 14px 14px; flex-shrink: 0;
-        position: relative; z-index: 5; overflow: hidden;
-        background: var(--sb-bg);
-    }
-
-    .health-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .health-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .5px; color: var(--sb-label); flex: none !important; }
-    .health-val { font-size: 10.5px; font-weight: 700; color: var(--teal); flex: none !important; }
-    .health-track { height: 4px; background: rgba(255,255,255,.1); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
-    .health-fill  { height: 100%; background: linear-gradient(90deg, var(--accent), var(--teal)); border-radius: 4px; }
-
+    .sidebar-footer { border-top: 1px solid var(--sb-border); padding: 12px 14px 14px; flex-shrink: 0; position: relative; z-index: 5; overflow: hidden; background: var(--sb-bg); }
+    .health-row  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .health-lbl  { font-size: 10.5px; font-weight: 600; letter-spacing: .5px; color: var(--sb-label); flex: none !important; }
+    .health-val  { font-size: 10.5px; font-weight: 700; color: var(--teal); flex: none !important; }
+    .health-track{ height: 4px; background: rgba(255,255,255,.1); border-radius: 4px; overflow: hidden; margin-bottom: 14px; }
+    .health-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--teal)); border-radius: 4px; }
     .profile-row { display: flex; align-items: center; gap: 10px; }
-
-    .profile-av {
-        width: 34px; height: 34px; border-radius: 50%;
-        background: var(--accent);
-        display: flex; align-items: center; justify-content: center;
-        color: #fff; font-weight: 700; font-size: 13px;
-        flex-shrink: 0; box-shadow: 0 2px 8px var(--accent-glow);
-    }
-
-    .profile-info { display: flex; flex-direction: column; overflow: hidden; }
-    .profile-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; }
-    .profile-role { font-size: 11px; color: var(--sb-label); white-space: nowrap; }
-
-    .profile-menu {
-        margin-left: auto; background: none; border: none;
-        color: var(--sb-label); cursor: pointer;
-        padding: 4px 6px; border-radius: 4px; font-size: 14px;
-        flex-shrink: 0; transition: color var(--ease), background var(--ease);
-    }
-
+    .profile-av  { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 13px; flex-shrink: 0; box-shadow: 0 2px 8px var(--accent-glow); }
+    .profile-info{ display: flex; flex-direction: column; overflow: hidden; }
+    .profile-name{ font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; }
+    .profile-role{ font-size: 11px; color: var(--sb-label); white-space: nowrap; }
+    .profile-menu{ margin-left: auto; background: none; border: none; color: var(--sb-label); cursor: pointer; padding: 4px 6px; border-radius: 4px; font-size: 14px; flex-shrink: 0; transition: color var(--ease), background var(--ease); }
     .profile-menu:hover { color: #fff; background: var(--sb-hover); }
-
 
     /* ══════════════════════════════════════════
        COLLAPSED STATE
     ══════════════════════════════════════════ */
-
-    /* Use display:none — eliminates ALL residual flex space (fixes Users icon shift) */
     .sidebar-collapsed .sb-brand,
     .sidebar-collapsed .nav-label,
     .sidebar-collapsed .nt,
@@ -416,142 +292,47 @@
     .sidebar-collapsed .health-row,
     .sidebar-collapsed .health-track,
     .sidebar-collapsed .profile-info,
-    .sidebar-collapsed .profile-menu {
-        display: none;
-    }
+    .sidebar-collapsed .profile-menu { display: none; }
 
-    /* Subnav hidden separately — uses max-height:0 already, just ensure it stays closed */
     .sidebar-collapsed .subnav { max-height: 0 !important; margin: 0; padding: 0; border: none; }
-
     .sidebar-collapsed .sidebar-header { justify-content: center; padding: 0; }
     .sidebar-collapsed .sb-logo        { margin: 0 auto; }
-
     .sidebar-collapsed .nav-item,
-    .sidebar-collapsed .nav-parent {
-        justify-content: center;
-        padding: 10px 0;
-        gap: 0;
-        width: 100%;
-    }
-
+    .sidebar-collapsed .nav-parent     { justify-content: center; padding: 10px 0; gap: 0; width: 100%; }
     .sidebar-collapsed .nav-item .ni,
-    .sidebar-collapsed .nav-parent .ni {
-        width: var(--sidebar-width-collapsed);
-        min-width: unset;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        margin: 0;
-        flex-shrink: 0;
-    }
-
+    .sidebar-collapsed .nav-parent .ni { width: var(--sidebar-width-collapsed); min-width: unset; display: flex; align-items: center; justify-content: center; font-size: 16px; margin: 0; flex-shrink: 0; }
     .sidebar-collapsed .nav-item.active::before { display: none; }
-
     .sidebar-collapsed .nav-item.active .ni { position: relative; }
-    .sidebar-collapsed .nav-item.active .ni::after {
-        content: '';
-        position: absolute;
-        top: 3px; right: 8px;
-        width: 5px; height: 5px;
-        border-radius: 50%;
-        background: var(--accent);
-    }
-
+    .sidebar-collapsed .nav-item.active .ni::after { content: ''; position: absolute; top: 3px; right: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
     .sidebar-collapsed .profile-row    { justify-content: center; }
     .sidebar-collapsed .sidebar-footer { padding: 10px 0 14px; }
     .sidebar-collapsed .profile-av     { margin: 0 auto; }
 
-
     /* ══════════════════════════════════════════
        FLYOUT TOOLTIPS
-       Use visibility (not display:none) so the
-       browser keeps hover tracking active.
     ══════════════════════════════════════════ */
-
     .flyout-panel {
-        visibility: hidden;
-        opacity: 0;
+        visibility: hidden; opacity: 0;
         position: absolute;
         left: calc(var(--sidebar-width-collapsed) + 2px);
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 9999;
-        pointer-events: none;
+        top: 50%; transform: translateY(-50%);
+        z-index: 9999; pointer-events: none;
         transition: opacity .12s ease, visibility .12s ease;
-        background: #1b2d4f;
-        color: #fff;
-        padding: 6px 13px;
-        border-radius: var(--radius);
-        font-size: 12px;
-        font-weight: 600;
-        white-space: nowrap;
+        background: #1b2d4f; color: #fff;
+        padding: 6px 13px; border-radius: var(--radius);
+        font-size: 12px; font-weight: 600; white-space: nowrap;
         box-shadow: 0 4px 16px rgba(0,0,0,.40);
         border: 1px solid rgba(255,255,255,.12);
     }
+    .flyout-panel::after  { content: ''; position: absolute; right: 100%; top: 0; width: 10px; height: 100%; background: transparent; }
+    .flyout-panel::before { content: ''; position: absolute; right: 100%; top: 50%; transform: translateY(-50%); border: 6px solid transparent; border-right-color: #1b2d4f; }
 
-    /* Invisible bridge fills the gap between sidebar edge and flyout panel
-       so hover stays active while mouse travels across */
-    .flyout-panel::after {
-        content: '';
-        position: absolute;
-        right: 100%;
-        top: 0;
-        width: 10px;
-        height: 100%;
-        background: transparent;
-    }
+    .flyout-panel--group { padding: 8px 0; top: 0; transform: none; min-width: 180px; }
+    .flyout-panel--group::before { top: 14px; transform: none; }
 
-    /* Left-pointing arrow */
-    .flyout-panel::before {
-        content: '';
-        position: absolute;
-        right: 100%; top: 50%;
-        transform: translateY(-50%);
-        border: 6px solid transparent;
-        border-right-color: #1b2d4f;
-    }
+    .flyout-group-title { display: block; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.35); padding: 4px 14px 6px; white-space: nowrap; pointer-events: none; user-select: none; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 4px; }
 
-    /* Group panel overrides */
-    .flyout-panel--group {
-        padding: 8px 0;
-        top: 0;
-        transform: none;
-        min-width: 180px;
-    }
-
-    .flyout-panel--group::before {
-        top: 14px;
-        transform: none;
-    }
-
-    /* Group title — label only, never clickable */
-    .flyout-group-title {
-        display: block;
-        font-size: 10px; font-weight: 700;
-        letter-spacing: 1px; text-transform: uppercase;
-        color: rgba(255,255,255,.35);
-        padding: 4px 14px 6px;
-        white-space: nowrap;
-        pointer-events: none;
-        user-select: none;
-        border-bottom: 1px solid rgba(255,255,255,.08);
-        margin-bottom: 4px;
-    }
-
-    /* Child link items — fully clickable */
-    .flyout-item {
-        display: flex; align-items: center; gap: 9px;
-        padding: 8px 14px;
-        color: rgba(255,255,255,.80);
-        text-decoration: none;
-        font-size: 13px; font-weight: 500;
-        white-space: nowrap;
-        cursor: pointer;
-        pointer-events: auto;
-        transition: background var(--ease), color var(--ease);
-    }
-
+    .flyout-item { display: flex; align-items: center; gap: 9px; padding: 8px 14px; color: rgba(255,255,255,.80); text-decoration: none; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; pointer-events: auto; transition: background var(--ease), color var(--ease); }
     .flyout-item:hover { background: rgba(255,255,255,.10); color: #fff; }
     .flyout-item i     { font-size: 12px; color: rgba(255,255,255,.45); width: 14px; flex-shrink: 0; }
 
@@ -559,33 +340,15 @@
     .flyout-dot.dot-ok   { background: var(--teal); }
     .flyout-dot.dot-warn { background: #fbbf24; }
 
-    /* Show on hover — only when collapsed on desktop */
-    .sidebar-collapsed:not(.sidebar-mobile-open) .nav-flyout-wrap:hover .flyout-panel {
-        visibility: visible;
-        opacity: 1;
-        pointer-events: auto;
-    }
-
+    .sidebar-collapsed:not(.sidebar-mobile-open) .nav-flyout-wrap:hover .flyout-panel { visibility: visible; opacity: 1; pointer-events: auto; }
 
     /* ══════════════════════════════════════════
        MOBILE
     ══════════════════════════════════════════ */
-
     @@media (max-width: 768px) {
-        .sidebar {
-            position: fixed; top: 0; left: 0; bottom: 0;
-            transform: translateX(-100%);
-            transition: transform var(--ease);
-            width: var(--sidebar-width) !important;
-            overflow: hidden;
-            box-shadow: none;
-        }
-
+        .sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(-100%); transition: transform var(--ease); width: var(--sidebar-width) !important; overflow: hidden; box-shadow: none; }
         .sidebar.sidebar-mobile-open { transform: translateX(0); box-shadow: var(--shadow-md); }
-
         .sb-close-btn { display: flex; }
-
-        /* Restore all hidden elements when mobile panel opens */
         .sidebar.sidebar-mobile-open .sb-brand,
         .sidebar.sidebar-mobile-open .nav-label,
         .sidebar.sidebar-mobile-open .nt,
@@ -595,10 +358,7 @@
         .sidebar.sidebar-mobile-open .health-row,
         .sidebar.sidebar-mobile-open .health-track,
         .sidebar.sidebar-mobile-open .profile-info,
-        .sidebar.sidebar-mobile-open .profile-menu {
-            display: revert;
-        }
-
+        .sidebar.sidebar-mobile-open .profile-menu { display: revert; }
         .sidebar.sidebar-mobile-open .nav-label      { padding: 10px 10px 4px; }
         .sidebar.sidebar-mobile-open .nav-item,
         .sidebar.sidebar-mobile-open .nav-parent     { justify-content: flex-start; padding: 9px 10px; gap: 10px; }
@@ -609,8 +369,6 @@
         .sidebar.sidebar-mobile-open .sidebar-footer { padding: 12px 14px 14px; }
         .sidebar.sidebar-mobile-open .sidebar-body   { padding: 8px 10px; }
         .sidebar.sidebar-mobile-open .profile-av     { margin: 0; }
-
-        /* Never show flyouts on mobile */
         .flyout-panel { display: none !important; }
     }
 </style>

@@ -1,0 +1,31 @@
+@* Shared/Components/SidebarNavItem.razor *@
+@* Renders a single leaf nav link + its collapsed flyout label tooltip. *@
+
+<div class="nav-flyout-wrap">
+    <NavLink href="@Item.Href"
+             Match="@(Item.ExactMatch ? NavLinkMatch.All : NavLinkMatch.Prefix)"
+             class="nav-item"
+             @onclick="OnClose">
+        <span class="ni"><i class="@Item.Icon"></i></span>
+        <span class="nt">@Item.Label</span>
+
+        @if (Item.Badge is { Type: "live" })
+        {
+            <span class="chip-live">@Item.Badge.Text</span>
+        }
+        else if (Item.Badge is { Type: "count" })
+        {
+            <span class="chip-count">@Item.Badge.Text</span>
+        }
+    </NavLink>
+
+    @* Flyout tooltip shown when sidebar is collapsed *@
+    <div class="flyout-panel">
+        <span class="flyout-label">@Item.Label</span>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public NavItem       Item    { get; set; } = default!;
+    [Parameter]                 public EventCallback OnClose { get; set; }
+}

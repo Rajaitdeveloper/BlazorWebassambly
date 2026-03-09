@@ -1,0 +1,68 @@
+@* Shared/Components/SidebarNavGroup.razor *@
+@* Renders an expandable group parent (e.g. Servers) with subnav children
+   and the collapsed flyout panel showing all child links. *@
+
+<div class="nav-flyout-wrap">
+
+    @* ── Parent toggle button ── *@
+    <button class="nav-item nav-parent @(_open ? "open" : "")"
+            @onclick="Toggle">
+        <span class="ni"><i class="@Item.Icon"></i></span>
+        <span class="nt">@Item.Label</span>
+        <i class="fa-solid fa-chevron-down sb-chev ms-auto"></i>
+    </button>
+
+    @* ── Expanded subnav (visible when sidebar is open) ── *@
+    <div class="subnav @(_open && !Collapsed ? "subnav-open" : "")">
+        @foreach (var child in Item.Children)
+        {
+            <NavLink href="@child.Href" class="sub-item" @onclick="OnClose">
+                <i class="@child.Icon sub-icon"></i>
+                <span class="nt">@child.Label</span>
+                @if (child.StatusDot == "ok")
+                {
+                    <span class="status-dot dot-ok"></span>
+                }
+                else if (child.StatusDot == "warn")
+                {
+                    <span class="status-dot dot-warn"></span>
+                }
+            </NavLink>
+        }
+    </div>
+
+    @* ── Flyout panel shown when sidebar is collapsed ── *@
+    <div class="flyout-panel flyout-panel--group">
+        <span class="flyout-group-title">@Item.Label</span>
+        @foreach (var child in Item.Children)
+        {
+            <a href="@child.Href" class="flyout-item">
+                <i class="@child.Icon"></i>
+                @child.Label
+                @if (child.StatusDot == "ok")
+                {
+                    <span class="flyout-dot dot-ok"></span>
+                }
+                else if (child.StatusDot == "warn")
+                {
+                    <span class="flyout-dot dot-warn"></span>
+                }
+            </a>
+        }
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public NavItem       Item      { get; set; } = default!;
+    [Parameter]                 public bool          Collapsed { get; set; }
+    [Parameter]                 public EventCallback OnClose   { get; set; }
+
+    bool _open = false;
+
+    void Toggle()
+    {
+        if (Collapsed) return;   // flyout handles navigation when collapsed
+        _open = !_open;
+    }
+}
