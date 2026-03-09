@@ -1,0 +1,173 @@
+@* Shared/AppTopbar.razor *@
+@inject NavigationManager Nav
+@implements IDisposable
+
+<header class="topbar">
+
+    <div class="tb-left">
+        <button class="tb-btn desktop-toggle" @onclick="OnToggleSidebar" title="Toggle sidebar">
+            <i class="fa-solid fa-bars-staggered"></i>
+        </button>
+        <button class="tb-btn mobile-toggle" @onclick="OnOpenMobile" title="Open menu">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="breadcrumb-wrap">
+            <i class="fa-solid fa-bolt tb-home-icon"></i>
+            <span class="bc-sep">/</span>
+            <i class="fa-solid @CurrentPageIcon tb-page-icon"></i>
+            <span class="bc-page">@CurrentPageName</span>
+        </div>
+    </div>
+
+    <div class="tb-right">
+        <button class="tb-btn tb-search" title="Search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        <button class="tb-btn tb-notif" title="Notifications">
+            <i class="fa-solid fa-bell"></i>
+            <span class="notif-pip"></span>
+        </button>
+        <span class="tb-sep"></span>
+        <button class="tb-btn" @onclick="OnToggleTheme" title="Toggle theme">
+            <i class="fa-solid @(IsDark ? "fa-sun" : "fa-moon")"></i>
+        </button>
+        <div class="tb-avatar" title="Profile">R</div>
+    </div>
+
+</header>
+
+@code {
+    [Parameter] public bool          IsDark           { get; set; }
+    [Parameter] public EventCallback OnToggleSidebar  { get; set; }
+    [Parameter] public EventCallback OnOpenMobile     { get; set; }
+    [Parameter] public EventCallback OnToggleTheme    { get; set; }
+
+    string CurrentPageName => ResolveName(Nav.ToBaseRelativePath(Nav.Uri));
+    string CurrentPageIcon => ResolveIcon(Nav.ToBaseRelativePath(Nav.Uri));
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+
+    static string ResolveName(string path)
+    {
+        path = path.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            ""                   => "Home",
+            "insurance"          => "Policies",
+            "billing"            => "Billing",
+            "users"              => "Users",
+            "security"           => "Security",
+            "servers/database"   => "Database",
+            "servers/network"    => "Network",
+            "servers/compute"    => "Compute",
+            _                    => ToTitleCase(path.Split('/')[^1])
+        };
+    }
+
+    static string ResolveIcon(string path)
+    {
+        path = path.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            ""                   => "fa-house",
+            "insurance"          => "fa-file-shield",
+            "billing"            => "fa-credit-card",
+            "users"              => "fa-user-group",
+            "security"           => "fa-lock",
+            "servers/database"   => "fa-database",
+            "servers/network"    => "fa-wifi",
+            "servers/compute"    => "fa-memory",
+            _                    => "fa-circle-dot"
+        };
+    }
+
+    static string ToTitleCase(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return char.ToUpper(s[0]) + s[1..];
+    }
+}
+
+<style>
+    .topbar {
+        height: var(--topbar-height);
+        display: flex; align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0; gap: 12px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .tb-left, .tb-right { display: flex; align-items: center; gap: 6px; }
+
+    .breadcrumb-wrap { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--txt-2); }
+    .tb-home-icon    { color: var(--accent); font-size: 12px; }
+    .tb-page-icon    { color: var(--teal); font-size: 12px; }
+    .bc-sep          { color: var(--txt-3); }
+    .bc-page         { font-weight: 600; color: var(--txt); }
+
+    .tb-btn {
+        width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: var(--radius);
+        background: transparent; border: 1px solid var(--border);
+        color: var(--txt-2); cursor: pointer; font-size: 13px;
+        flex-shrink: 0;
+        transition: background var(--ease), color var(--ease), border-color var(--ease);
+    }
+
+    .tb-btn:hover { background: var(--accent-faint); color: var(--accent); border-color: var(--accent); }
+
+    .tb-notif { position: relative; }
+
+    .notif-pip {
+        position: absolute; top: 6px; right: 6px;
+        width: 8px; height: 8px; border-radius: 50%;
+        background: var(--accent); border: 2px solid var(--surface);
+    }
+
+    .tb-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
+
+    .tb-avatar {
+        width: 34px; height: 34px; border-radius: 50%;
+        background: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-weight: 700; font-size: 13px;
+        cursor: pointer; flex-shrink: 0;
+        border: 2px solid transparent;
+        transition: border-color var(--ease), box-shadow var(--ease);
+    }
+
+    .tb-avatar:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
+
+    .mobile-toggle  { display: none; }
+    .desktop-toggle { display: flex; }
+
+    @@media (max-width: 768px) {
+        .topbar    { padding: 0 14px; }
+        .bc-page   { display: none; }
+        .bc-sep    { display: none; }
+        .tb-search { display: none; }
+        .mobile-toggle  { display: flex; }
+        .desktop-toggle { display: none; }
+    }
+
+    @@media (max-width: 400px) {
+        .breadcrumb-wrap { display: none; }
+    }
+</style>

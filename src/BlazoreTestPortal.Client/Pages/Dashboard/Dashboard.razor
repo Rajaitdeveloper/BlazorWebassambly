@@ -1,0 +1,568 @@
+@page "/"
+@using System.Globalization
+
+<PageTitle>Insurance Policies – Blazore Test Portal</PageTitle>
+
+<div class="ip-dashboard">
+
+    @* ── Toolbar ── *@
+    <div class="ip-toolbar">
+        <div>
+            <div class="ip-title">Insurance Policies</div>
+            <div class="ip-subtitle">Manage and review policy details</div>
+        </div>
+        <button class="ip-add-btn">
+            <i class="fa-solid fa-plus"></i>
+            Add Policy
+        </button>
+    </div>
+
+    @* ── Card ── *@
+    <div class="ip-card">
+
+        @* ── Filters ── *@
+        <div class="ip-filters">
+            <div class="ip-search-wrap">
+                <i class="fa-solid fa-magnifying-glass ip-search-icon"></i>
+                <input class="ip-search"
+                       placeholder="Search policy, customer, plan…"
+                       @bind="SearchText"
+                       @bind:event="oninput" />
+            </div>
+
+            <select class="ip-select" @bind="SelectedStatus">
+                <option value="">All Status</option>
+                <option>Active</option>
+                <option>Pending</option>
+                <option>Expired</option>
+                <option>Cancelled</option>
+            </select>
+
+            <select class="ip-select" @bind="SelectedPlan">
+                <option value="">All Plans</option>
+                @foreach (var p in Policies.Select(x => x.Plan).Distinct())
+                {
+                    <option>@p</option>
+                }
+            </select>
+
+            <button class="ip-reset-btn" @onclick="ClearFilters">
+                <i class="fa-solid fa-rotate-left"></i>
+                Reset
+            </button>
+        </div>
+
+        @* ── Table ── *@
+        <div class="ip-table-wrap">
+            <table class="ip-table">
+                <thead>
+                    <tr>
+                        <th><button class="ip-sort-btn" @onclick="() => SortBy(nameof(InsurancePolicy.PolicyNumber))">Policy @SortIcon(nameof(InsurancePolicy.PolicyNumber))</button></th>
+                        <th><button class="ip-sort-btn" @onclick="() => SortBy(nameof(InsurancePolicy.CustomerName))">Customer @SortIcon(nameof(InsurancePolicy.CustomerName))</button></th>
+                        <th><button class="ip-sort-btn" @onclick="() => SortBy(nameof(InsurancePolicy.Plan))">Plan @SortIcon(nameof(InsurancePolicy.Plan))</button></th>
+                        <th><button class="ip-sort-btn" @onclick="() => SortBy(nameof(InsurancePolicy.Premium))">Premium @SortIcon(nameof(InsurancePolicy.Premium))</button></th>
+                        <th><button class="ip-sort-btn" @onclick="() => SortBy(nameof(InsurancePolicy.Status))">Status @SortIcon(nameof(InsurancePolicy.Status))</button></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (PagedPolicies.Any())
+                    {
+                        @foreach (var item in PagedPolicies)
+                        {
+                            <tr class="ip-row">
+                                <td class="ip-policy-num">@item.PolicyNumber</td>
+                                <td>
+                                    <div class="ip-cust-name">@item.CustomerName</div>
+                                    <div class="ip-cust-email">@item.Email</div>
+                                </td>
+                                <td><span class="ip-plan-tag">@item.Plan</span></td>
+                                <td class="ip-premium">@item.Premium.ToString("C", UsCulture)</td>
+                                <td><span class="ip-status ip-status--@item.Status.ToLowerInvariant()">@item.Status</span></td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="5" class="ip-empty">
+                                <i class="fa-solid fa-file-circle-xmark"></i>
+                                <span>No records found</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* ── Pagination ── *@
+        <div class="ip-pagination">
+            <div class="ip-count">
+                Showing <strong>@StartItem–@EndItem</strong> of <strong>@FilteredPolicies.Count()</strong>
+            </div>
+            <div class="ip-pager">
+                <select class="ip-page-size" @bind="PageSize">
+                    <option value="5">5 / page</option>
+                    <option value="10">10 / page</option>
+                    <option value="20">20 / page</option>
+                </select>
+                <button class="ip-pager-btn" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+                <span class="ip-page-label">@CurrentPage <span class="ip-page-of">of</span> @TotalPages</span>
+                <button class="ip-pager-btn" @onclick="NextPage" disabled="@(CurrentPage == TotalPages || TotalPages == 0)">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    /* ══════════════════════════════════════════
+       Insurance Policies — component-only styles
+       All classes prefixed .ip- to prevent leaking
+    ══════════════════════════════════════════ */
+
+    /* ── Layout ── */
+    .ip-dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+    }
+
+    /* ── Toolbar ── */
+    .ip-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .ip-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--txt);
+        margin-bottom: 3px;
+    }
+
+    .ip-subtitle {
+        font-size: 13px;
+        color: var(--txt-2);
+    }
+
+    .ip-add-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 18px;
+        border-radius: var(--radius);
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: var(--font);
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: background var(--ease);
+    }
+
+    .ip-add-btn:hover { background: var(--accent-hover); }
+
+    /* ── Card ── */
+    .ip-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* ── Filters ── */
+    .ip-filters {
+        display: flex;
+        gap: 10px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+        align-items: center;
+        background: var(--surface-2);
+    }
+
+    .ip-search-wrap {
+        position: relative;
+        flex: 1 1 240px;
+        min-width: 200px;
+    }
+
+    .ip-search-icon {
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 12px;
+        color: var(--txt-3);
+        pointer-events: none;
+    }
+
+    .ip-search {
+        width: 100%;
+        padding: 8px 12px 8px 32px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--txt);
+        font-size: 13px;
+        font-family: var(--font);
+        transition: border-color var(--ease);
+    }
+
+    .ip-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
+
+    .ip-select {
+        padding: 8px 12px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--txt);
+        font-size: 13px;
+        font-family: var(--font);
+        cursor: pointer;
+        min-width: 140px;
+        transition: border-color var(--ease);
+    }
+
+    .ip-select:focus { outline: none; border-color: var(--accent); }
+
+    .ip-reset-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--txt-2);
+        font-size: 13px;
+        font-family: var(--font);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background var(--ease), border-color var(--ease), color var(--ease);
+    }
+
+    .ip-reset-btn:hover {
+        background: var(--accent-faint);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    /* ── Table scroll container ── */
+    .ip-table-wrap {
+        overflow: auto;
+        max-height: 420px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-2) transparent;
+    }
+
+    .ip-table-wrap::-webkit-scrollbar        { width: 6px; height: 6px; }
+    .ip-table-wrap::-webkit-scrollbar-track  { background: transparent; }
+    .ip-table-wrap::-webkit-scrollbar-thumb  { background: var(--border-2); border-radius: 3px; }
+
+    /* ── Table ── */
+    .ip-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .ip-table thead tr {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--surface-2);
+    }
+
+    .ip-table thead th {
+        padding: 12px 18px;
+        border-bottom: 2px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .ip-sort-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: var(--txt-2);
+        cursor: pointer;
+        font-family: var(--font);
+        transition: color var(--ease);
+    }
+
+    .ip-sort-btn:hover     { color: var(--accent); }
+    .ip-sort-btn i         { color: var(--txt-3); font-size: 10px; }
+    .ip-sort-btn:hover i   { color: var(--accent); }
+
+    .ip-table tbody .ip-row td {
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+        color: var(--txt);
+    }
+
+    .ip-table tbody .ip-row:last-child td { border-bottom: none; }
+
+    .ip-table tbody .ip-row:hover td { background: var(--accent-faint); }
+
+    /* Policy number — teal monospace */
+    .ip-policy-num {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--teal) !important;
+        white-space: nowrap;
+    }
+
+    /* Customer */
+    .ip-cust-name  { font-weight: 600; color: var(--txt); line-height: 1.4; }
+    .ip-cust-email { font-size: 11.5px; color: var(--txt-3); margin-top: 1px; }
+
+    /* Plan tag — teal pill */
+    .ip-plan-tag {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--teal-faint);
+        color: var(--teal);
+        border: 1px solid rgba(4,89,90,.15);
+        white-space: nowrap;
+    }
+
+    /* Premium — tabular numbers */
+    .ip-premium {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /* ── Status badges ── */
+    .ip-status {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .2px;
+        white-space: nowrap;
+    }
+
+    .ip-status--active    { background: rgba(4,89,90,.12);    color: var(--teal);   border: 1px solid rgba(4,89,90,.2);    }
+    .ip-status--pending   { background: rgba(251,191,36,.15); color: #92400e;       border: 1px solid rgba(251,191,36,.3); }
+    .ip-status--expired   { background: rgba(200,23,102,.12); color: var(--accent); border: 1px solid rgba(200,23,102,.2); }
+    .ip-status--cancelled { background: rgba(148,163,184,.15); color: var(--txt-2); border: 1px solid var(--border);       }
+
+    /* ── Empty state row ── */
+    .ip-empty {
+        text-align: center;
+        padding: 48px 20px !important;
+        color: var(--txt-3);
+        border-bottom: none !important;
+    }
+
+    .ip-empty i    { font-size: 28px; display: block; margin-bottom: 10px; color: var(--txt-3); }
+    .ip-empty span { font-size: 13px; }
+
+    /* ── Pagination ── */
+    .ip-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-2);
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .ip-count        { font-size: 12px; color: var(--txt-2); }
+    .ip-count strong { color: var(--txt); }
+
+    .ip-pager { display: flex; align-items: center; gap: 8px; }
+
+    .ip-page-size {
+        padding: 6px 10px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--txt);
+        font-size: 12px;
+        font-family: var(--font);
+        cursor: pointer;
+        transition: border-color var(--ease);
+    }
+
+    .ip-page-size:focus { outline: none; border-color: var(--accent); }
+
+    .ip-pager-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--txt-2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background var(--ease), border-color var(--ease), color var(--ease);
+    }
+
+    .ip-pager-btn:hover:not(:disabled) {
+        background: var(--accent-faint);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .ip-pager-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .ip-page-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--txt);
+        min-width: 56px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .ip-page-of { font-weight: 400; color: var(--txt-3); }
+
+    /* ── Responsive ── */
+    @@media (max-width: 768px) {
+        .ip-filters    { flex-direction: column; }
+        .ip-search-wrap,
+        .ip-select     { width: 100%; min-width: unset; flex: unset; }
+        .ip-pagination { flex-direction: column; align-items: stretch; }
+        .ip-pager      { justify-content: space-between; }
+        .ip-table thead th,
+        .ip-table tbody .ip-row td { padding: 10px 12px; }
+    }
+</style>
+
+@code {
+    static readonly CultureInfo UsCulture = CultureInfo.GetCultureInfo("en-US");
+
+    string SearchText     = "";
+    string SelectedStatus = "";
+    string SelectedPlan   = "";
+
+    string SortColumn    = nameof(InsurancePolicy.PolicyNumber);
+    bool   SortAscending = true;
+
+    int _pageSize = 5;
+    int PageSize
+    {
+        get => _pageSize;
+        set { _pageSize = value; CurrentPage = 1; }
+    }
+
+    int CurrentPage = 1;
+
+    List<InsurancePolicy> Policies = new()
+    {
+        new() { PolicyNumber = "INS-1001", CustomerName = "John Carter",    Email = "john@email.com",    Plan = "Gold",   Premium = 420, Status = "Active"    },
+        new() { PolicyNumber = "INS-1002", CustomerName = "Mary Smith",     Email = "mary@email.com",    Plan = "Silver", Premium = 310, Status = "Pending"   },
+        new() { PolicyNumber = "INS-1003", CustomerName = "Robert King",    Email = "robert@email.com",  Plan = "Gold",   Premium = 650, Status = "Active"    },
+        new() { PolicyNumber = "INS-1004", CustomerName = "Jennifer Lopez", Email = "jen@email.com",     Plan = "Basic",  Premium = 210, Status = "Expired"   },
+        new() { PolicyNumber = "INS-1005", CustomerName = "David Lee",      Email = "david@email.com",   Plan = "Gold",   Premium = 430, Status = "Active"    },
+        new() { PolicyNumber = "INS-1006", CustomerName = "Sophia Brown",   Email = "sophia@email.com",  Plan = "Silver", Premium = 295, Status = "Pending"   },
+        new() { PolicyNumber = "INS-1007", CustomerName = "James Wilson",   Email = "james@email.com",   Plan = "Basic",  Premium = 180, Status = "Cancelled" },
+        new() { PolicyNumber = "INS-1008", CustomerName = "Olivia Davis",   Email = "olivia@email.com",  Plan = "Gold",   Premium = 510, Status = "Active"    },
+    };
+
+    IEnumerable<InsurancePolicy> FilteredPolicies
+    {
+        get
+        {
+            var q = Policies.Where(p =>
+                (string.IsNullOrWhiteSpace(SearchText) ||
+                 p.PolicyNumber.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
+                 p.CustomerName.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
+                 p.Plan.Contains(SearchText,         StringComparison.OrdinalIgnoreCase))
+                && (string.IsNullOrWhiteSpace(SelectedStatus) || p.Status == SelectedStatus)
+                && (string.IsNullOrWhiteSpace(SelectedPlan)   || p.Plan   == SelectedPlan));
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(q.Count() / (double)PageSize));
+            if (CurrentPage > totalPages) CurrentPage = totalPages;
+
+            return q;
+        }
+    }
+
+    IEnumerable<InsurancePolicy> SortedPolicies => SortColumn switch
+    {
+        nameof(InsurancePolicy.CustomerName) => SortAscending ? FilteredPolicies.OrderBy(x => x.CustomerName)  : FilteredPolicies.OrderByDescending(x => x.CustomerName),
+        nameof(InsurancePolicy.Plan)         => SortAscending ? FilteredPolicies.OrderBy(x => x.Plan)          : FilteredPolicies.OrderByDescending(x => x.Plan),
+        nameof(InsurancePolicy.Premium)      => SortAscending ? FilteredPolicies.OrderBy(x => x.Premium)       : FilteredPolicies.OrderByDescending(x => x.Premium),
+        nameof(InsurancePolicy.Status)       => SortAscending ? FilteredPolicies.OrderBy(x => x.Status)        : FilteredPolicies.OrderByDescending(x => x.Status),
+        _                                    => SortAscending ? FilteredPolicies.OrderBy(x => x.PolicyNumber)   : FilteredPolicies.OrderByDescending(x => x.PolicyNumber),
+    };
+
+    IEnumerable<InsurancePolicy> PagedPolicies =>
+        SortedPolicies.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+
+    int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredPolicies.Count() / (double)PageSize));
+    int StartItem  => FilteredPolicies.Any() ? (CurrentPage - 1) * PageSize + 1 : 0;
+    int EndItem    => Math.Min(CurrentPage * PageSize, FilteredPolicies.Count());
+
+    void SortBy(string column)
+    {
+        SortAscending = SortColumn == column ? !SortAscending : true;
+        SortColumn    = column;
+        CurrentPage   = 1;
+    }
+
+    void PreviousPage() { if (CurrentPage > 1)         CurrentPage--; }
+    void NextPage()     { if (CurrentPage < TotalPages) CurrentPage++; }
+
+    void ClearFilters()
+    {
+        SearchText     = "";
+        SelectedStatus = "";
+        SelectedPlan   = "";
+        CurrentPage    = 1;
+        SortColumn     = nameof(InsurancePolicy.PolicyNumber);
+        SortAscending  = true;
+    }
+
+    RenderFragment SortIcon(string column) => builder =>
+    {
+        var icon = SortColumn != column ? "fa-sort"
+                 : SortAscending        ? "fa-sort-up"
+                                        : "fa-sort-down";
+        builder.OpenElement(0, "i");
+        builder.AddAttribute(1, "class", $"fa-solid {icon}");
+        builder.CloseElement();
+    };
+
+    class InsurancePolicy
+    {
+        public string  PolicyNumber { get; set; } = "";
+        public string  CustomerName { get; set; } = "";
+        public string  Email        { get; set; } = "";
+        public string  Plan         { get; set; } = "";
+        public decimal Premium      { get; set; }
+        public string  Status       { get; set; } = "";
+    }
+}

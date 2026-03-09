@@ -1,0 +1,44 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+@if (_mobileOpen)
+{
+    <div class="sidebar-backdrop" @onclick="CloseMobile"></div>
+}
+
+<div class="app-shell">
+
+    <AppSidebar Collapsed="@_collapsed"
+                MobileOpen="@_mobileOpen"
+                OnClose="@CloseMobile" />
+
+    <div class="main-wrap">
+
+        <AppTopbar IsDark="@_isDark"
+                   OnToggleSidebar="@ToggleSidebar"
+                   OnOpenMobile="@OpenMobile"
+                   OnToggleTheme="@ToggleTheme" />
+
+        <main class="page-body">
+            @Body
+        </main>
+
+    </div>
+
+</div>
+
+@code {
+    bool _collapsed  = false;
+    bool _mobileOpen = false;
+    bool _isDark     = false;
+
+    void ToggleSidebar() { _collapsed  = !_collapsed; }
+    void OpenMobile()    { _mobileOpen = true; }
+    void CloseMobile()   { _mobileOpen = false; }
+
+    async Task ToggleTheme()
+    {
+        _isDark = !_isDark;
+        await JS.InvokeVoidAsync("appTheme.toggle");
+    }
+}

@@ -1,0 +1,81 @@
+@* Shared/Components/ConfirmDialog.razor
+   Usage: <ConfirmDialog @ref="_dialog" />
+          await _dialog.ShowAsync("Delete?", "Cannot be undone.", async () => await DeleteAsync(id)); *@
+
+@if (_visible)
+{
+    <div class="dialog-backdrop" @onclick="Dismiss">
+        <div class="dialog-box" @onclick:stopPropagation>
+            <div class="dialog-header">
+                <i class="fa-solid fa-triangle-exclamation dialog-icon"></i>
+                <span class="dialog-title">@_title</span>
+            </div>
+            <p class="dialog-msg">@_message</p>
+            <div class="dialog-actions">
+                <button class="dialog-cancel"  @onclick="Dismiss">Cancel</button>
+                <button class="dialog-confirm" @onclick="Confirm">@_confirmLabel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool        _visible;
+    string      _title        = "Are you sure?";
+    string      _message      = string.Empty;
+    string      _confirmLabel = "Confirm";
+    Func<Task>? _onConfirm;
+
+    public Task ShowAsync(string title, string message, Func<Task> onConfirm, string confirmLabel = "Confirm")
+    {
+        _title        = title;
+        _message      = message;
+        _onConfirm    = onConfirm;
+        _confirmLabel = confirmLabel;
+        _visible      = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    async Task Confirm() { _visible = false; if (_onConfirm is not null) await _onConfirm(); }
+    void  Dismiss()      { _visible = false; }
+}
+
+<style>
+    .dialog-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+        z-index: 1000; display: flex; align-items: center; justify-content: center;
+        animation: dlg-fade .15s ease;
+    }
+
+    .dialog-box {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); padding: 28px 28px 22px;
+        width: 100%; max-width: 420px;
+        box-shadow: var(--shadow-md); animation: dlg-up .18s ease;
+    }
+
+    .dialog-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .dialog-icon   { color: var(--accent); font-size: 18px; }
+    .dialog-title  { font-size: 15px; font-weight: 700; color: var(--txt); }
+    .dialog-msg    { font-size: 13px; color: var(--txt-2); line-height: 1.6; margin-bottom: 22px; }
+
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+    .dialog-cancel, .dialog-confirm {
+        padding: 8px 18px; border-radius: var(--radius);
+        font-size: 13px; font-weight: 600; font-family: var(--font);
+        cursor: pointer; border: 1px solid var(--border);
+        transition: background var(--ease), border-color var(--ease), color var(--ease);
+    }
+
+    .dialog-cancel  { background: var(--surface-2); color: var(--txt-2); }
+    .dialog-cancel:hover { background: var(--border); color: var(--txt); }
+
+    .dialog-confirm { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .dialog-confirm:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+    @@keyframes dlg-fade { from { opacity: 0 } to { opacity: 1 } }
+    @@keyframes dlg-up   { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+</style>

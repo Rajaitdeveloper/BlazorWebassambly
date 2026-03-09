@@ -1,0 +1,45 @@
+@* Shared/Components/EmptyState.razor
+   Usage: <EmptyState Icon="fa-inbox" Title="Nothing here" Message="…">
+              <ActionContent><button>Do something</button></ActionContent>
+          </EmptyState> *@
+
+<div class="empty-state">
+    <div class="empty-icon">
+        <i class="fa-solid @Icon fa-fw"></i>
+    </div>
+    <h3 class="empty-title">@Title</h3>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p class="empty-msg">@Message</p>
+    }
+    @if (ActionContent is not null)
+    {
+        <div class="empty-action">@ActionContent</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string             Icon          { get; set; } = "fa-inbox";
+    [Parameter] public string             Title         { get; set; } = "Nothing here yet";
+    [Parameter] public string?            Message       { get; set; }
+    [Parameter] public RenderFragment?    ActionContent { get; set; }
+}
+
+<style>
+    .empty-state {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: 60px 24px; text-align: center;
+    }
+
+    .empty-icon {
+        width: 64px; height: 64px; border-radius: 16px;
+        background: var(--surface-2); border: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px; color: var(--txt-3); margin-bottom: 20px;
+    }
+
+    .empty-title { font-size: 16px; font-weight: 600; color: var(--txt); margin-bottom: 8px; }
+    .empty-msg   { font-size: 13px; color: var(--txt-2); max-width: 320px; line-height: 1.6; margin-bottom: 20px; }
+    .empty-action { margin-top: 4px; }
+</style>

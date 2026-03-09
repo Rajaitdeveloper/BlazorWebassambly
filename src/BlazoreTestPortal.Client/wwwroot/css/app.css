@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════
+   app.css  —  Global tokens, reset & base
+   Blazore Test Portal
+═══════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Lora:wght@600&display=swap');
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Tokens (Light) ── */
+:root {
+    --sidebar-width:           256px;
+    --sidebar-width-collapsed:  64px;
+    --topbar-height:            58px;
+    --ease:                     .22s cubic-bezier(.4,0,.2,1);
+
+    --font:        'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-brand:  'Lora', Georgia, serif;
+
+    --accent:        #c81766;
+    --accent-hover:  #a81257;
+    --accent-faint:  rgba(200,23,102,.12);
+    --accent-glow:   rgba(200,23,102,.25);
+
+    --teal:          #04595a;
+    --teal-hover:    #034445;
+    --teal-faint:    rgba(4,89,90,.12);
+    --teal-glow:     rgba(4,89,90,.30);
+
+    /* Sidebar (always dark navy) */
+    --sb-bg:         #345181;
+    --sb-text:       rgba(255,255,255,.68);
+    --sb-text-active:#ffffff;
+    --sb-hover:      rgba(255,255,255,.08);
+    --sb-active-bg:  rgba(200,23,102,.22);
+    --sb-border:     rgba(255,255,255,.10);
+    --sb-label:      rgba(255,255,255,.32);
+    --sb-icon:       rgba(255,255,255,.45);
+
+    /* Surface */
+    --bg:            #f0f3f8;
+    --surface:       #ffffff;
+    --surface-2:     #f7f9fc;
+    --border:        #e2e8f0;
+    --border-2:      #cbd5e1;
+    --txt:           #1e293b;
+    --txt-2:         #475569;
+    --txt-3:         #94a3b8;
+
+    --radius:        8px;
+    --radius-lg:     14px;
+    --shadow-sm:     0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-md:     0 4px 16px rgba(0,0,0,.10);
+}
+
+/* ── Tokens (Dark) ── */
+[data-bs-theme="dark"] {
+    --bg:            #0f172a;
+    --surface:       #1e293b;
+    --surface-2:     #253447;
+    --border:        rgba(255,255,255,.08);
+    --border-2:      rgba(255,255,255,.14);
+    --txt:           #f1f5f9;
+    --txt-2:         #94a3b8;
+    --txt-3:         #475569;
+    --shadow-sm:     0 1px 3px rgba(0,0,0,.30);
+    --shadow-md:     0 4px 16px rgba(0,0,0,.40);
+    --sb-bg:         #26395e;
+    --accent-faint:  rgba(200,23,102,.15);
+    --teal-faint:    rgba(4,89,90,.18);
+    --teal-glow:     rgba(4,89,90,.35);
+}
+
+/* ── Base ── */
+html, body {
+    height: 100%;
+    font-family: var(--font);
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--txt);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── App shell ── */
+.app-shell {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.main-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* ── Page body ── */
+.page-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px;
+    background: var(--bg);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.page-body::-webkit-scrollbar       { width: 5px; }
+.page-body::-webkit-scrollbar-track { background: transparent; }
+.page-body::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+
+/* ── Mobile backdrop ── */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 190;
+    backdrop-filter: blur(2px);
+    animation: backdrop-in .18s ease;
+}
+
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 768px) {
+    .sidebar-backdrop { display: block; }
+    .page-body        { padding: 16px; }
+    .main-wrap        { width: 100%; }
+}
