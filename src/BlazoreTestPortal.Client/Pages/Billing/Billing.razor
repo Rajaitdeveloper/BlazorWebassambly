@@ -1,1 +1,15 @@
-<AccessRequestForm />
+@page "/billing"
+@attribute [Authorize]
+
+<PageTitle>Billing – Blazore Test Portal</PageTitle>
+
+<div class="page-header">
+    <h1 class="page-title">Billing</h1>
+    <p class="page-sub">Manage your subscription and usage.</p>
+</div>
+
+<style>
+    .page-header { margin-bottom: 28px; }
+    .page-title  { font-size: 22px; font-weight: 700; color: var(--txt); margin-bottom: 4px; }
+    .page-sub    { font-size: 13px; color: var(--txt-2); }
+</style>

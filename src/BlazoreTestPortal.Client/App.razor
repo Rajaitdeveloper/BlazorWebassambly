@@ -1,14 +1,82 @@
-<Router AppAssembly="typeof(App).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-    <NotFound>
-        <PageTitle>404 – Not Found</PageTitle>
-        <LayoutView Layout="typeof(MainLayout)">
-            <div style="padding:40px; text-align:center; color:var(--txt-2);">
-                <h2>Page not found</h2>
-            </div>
-        </LayoutView>
-    </NotFound>
-</Router>
+@* App.razor — root component *@
+
+@* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DEV MODE — set to true to bypass login during development.
+   Flip to false (or delete the flag) before deploying.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ *@
+@code { const bool DevBypassAuth = true; }
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="typeof(App).Assembly">
+
+        <Found Context="routeData">
+
+            @if (DevBypassAuth)
+            {
+                @* ── DEV ONLY: no auth check, all pages open ── *@
+                <RouteView RouteData="routeData"
+                           DefaultLayout="typeof(MainLayout)" />
+            }
+            else
+            {
+                @* ── PRODUCTION: Azure AD gate ── *@
+                <AuthorizeRouteView RouteData="routeData"
+                                    DefaultLayout="typeof(MainLayout)">
+                    <Authorizing>
+                        <div class="auth-splash">
+                            <div class="auth-splash-spinner"></div>
+                            <span>Verifying your session…</span>
+                        </div>
+                    </Authorizing>
+                    <NotAuthorized>
+                        <RedirectToLogin />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            }
+
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+
+        <NotFound>
+            <PageTitle>404 – Not Found · Tindo Blazor</PageTitle>
+            <LayoutView Layout="typeof(MainLayout)">
+                <div class="auth-splash" style="flex-direction:column;gap:16px">
+                    <i class="fa-solid fa-circle-exclamation"
+                       style="font-size:2.4rem;color:var(--accent)"></i>
+                    <div>
+                        <h2 style="color:var(--txt);margin:0 0 6px">Page not found</h2>
+                        <p style="color:var(--txt-2);margin:0">
+                            The page you requested does not exist.
+                        </p>
+                    </div>
+                    <a href="/" class="auth-splash-back">
+                        <i class="fa-solid fa-arrow-left"></i> Back to home
+                    </a>
+                </div>
+            </LayoutView>
+        </NotFound>
+
+    </Router>
+</CascadingAuthenticationState>
+
+<style>
+    .auth-splash {
+        display: flex; align-items: center; justify-content: center;
+        gap: 14px; height: 100vh; padding: 20px; text-align: center;
+        font-size: 14px; color: var(--txt-2); font-family: var(--font);
+    }
+    .auth-splash-spinner {
+        width: 24px; height: 24px; border-radius: 50%;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+        animation: auth-spin .7s linear infinite; flex-shrink: 0;
+    }
+    .auth-splash-back {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: var(--accent); color: #fff; border-radius: var(--radius);
+        padding: 9px 20px; font-size: 13px; font-weight: 700;
+        text-decoration: none; transition: background .15s;
+    }
+    .auth-splash-back:hover { background: var(--accent-hover); }
+    @@keyframes auth-spin { to { transform: rotate(360deg); } }
+</style>

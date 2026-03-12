@@ -1,0 +1,89 @@
+@* Shared/Components/AuthStatusPage.razor *@
+@* Reusable full-screen status card.
+   Used by Authentication.razor for every MSAL callback state. *@
+
+<div class="asp-shell">
+    <div class="asp-card">
+
+        <div class="asp-icon-ring">
+            <i class="fa-solid @Icon" style="color:@IconColor"></i>
+        </div>
+
+        <h2 class="asp-title">@Title</h2>
+        <p  class="asp-msg">@Message</p>
+
+        @if (!string.IsNullOrWhiteSpace(ActionHref))
+        {
+            <a href="@ActionHref" class="asp-btn">
+                @ActionLabel
+            </a>
+        }
+
+        @* Always show portal name at bottom *@
+        <div class="asp-footer">
+            <i class="fa-solid fa-bolt" style="color:#c81766"></i>
+            Tindo Blazor Test Portal
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string  Icon        { get; set; } = "fa-circle-notch fa-spin";
+    [Parameter]                 public string  IconColor   { get; set; } = "var(--accent, #c81766)";
+    [Parameter, EditorRequired] public string  Title       { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string  Message     { get; set; } = string.Empty;
+    [Parameter]                 public string? ActionHref  { get; set; }
+    [Parameter]                 public string? ActionLabel { get; set; }
+}
+
+<style>
+.asp-shell {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 20px;
+    background: var(--bg, #f0f3f8);
+    font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+}
+
+.asp-card {
+    width: 100%; max-width: 380px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.10);
+    padding: 44px 36px 32px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+
+.asp-icon-ring {
+    width: 68px; height: 68px; border-radius: 50%;
+    background: var(--surface-2, #f7f9fc);
+    border: 1px solid var(--border, #e2e8f0);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+}
+
+.asp-title { font-size: 20px; font-weight: 700; color: var(--txt, #1e293b); margin: 0; }
+.asp-msg   {
+    font-size: 13.5px; color: var(--txt-2, #475569);
+    line-height: 1.65; margin: 0; max-width: 300px;
+}
+
+.asp-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #c81766; color: #fff; border-radius: 8px;
+    padding: 10px 26px;
+    font-size: 13px; font-weight: 700;
+    font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    text-decoration: none; margin-top: 6px;
+    transition: background .15s;
+}
+.asp-btn:hover { background: #a81257; }
+
+.asp-footer {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11.5px; color: var(--txt-3, #94a3b8);
+    margin-top: 10px;
+}
+</style>

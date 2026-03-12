@@ -1,3 +1,4 @@
+@* Shared/MainLayout.razor *@
 @inherits LayoutComponentBase
 @inject IJSRuntime JS
 
@@ -32,9 +33,9 @@
     bool _mobileOpen = false;
     bool _isDark     = false;
 
-    void ToggleSidebar() { _collapsed  = !_collapsed; }
-    void OpenMobile()    { _mobileOpen = true; }
-    void CloseMobile()   { _mobileOpen = false; }
+    void ToggleSidebar() => _collapsed  = !_collapsed;
+    void OpenMobile()    => _mobileOpen = true;
+    void CloseMobile()   => _mobileOpen = false;
 
     async Task ToggleTheme()
     {

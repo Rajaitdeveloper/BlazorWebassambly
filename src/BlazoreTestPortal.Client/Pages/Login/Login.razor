@@ -1,0 +1,436 @@
+@* Pages/Login/Login.razor *@
+@* Public sign-in page — shown when the user navigates to /login directly,
+   or when they click "Sign in again" after logout.
+   Protected pages now redirect straight to MSAL via RedirectToLogin.razor. *@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+@inject NavigationManager             Nav
+@inject AuthenticationStateProvider  AuthState
+
+<PageTitle>Sign In - Tindo Blazor</PageTitle>
+
+<div class="lgn-shell">
+
+    @* ── Left branding panel ── *@
+    <aside class="lgn-brand">
+        <div class="lgn-brand-inner">
+            <div class="lgn-brand-logo">
+                <i class="fa-solid fa-bolt"></i>
+            </div>
+            <h1 class="lgn-brand-name">Tindo Blazor</h1>
+            <p class="lgn-brand-tag">TEST PORTAL</p>
+            <p class="lgn-brand-desc">
+                Enterprise infrastructure management, secured by
+                Microsoft Azure Active Directory.
+            </p>
+            <ul class="lgn-features">
+                <li>
+                    <span class="lgn-feat-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                    <span>Azure AD single sign-on</span>
+                </li>
+                <li>
+                    <span class="lgn-feat-icon"><i class="fa-solid fa-lock"></i></span>
+                    <span>Multi-factor authentication</span>
+                </li>
+                <li>
+                    <span class="lgn-feat-icon"><i class="fa-solid fa-users"></i></span>
+                    <span>Role-based access control</span>
+                </li>
+                <li>
+                    <span class="lgn-feat-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                    <span>Audit trail &amp; session logging</span>
+                </li>
+            </ul>
+        </div>
+        <div class="lgn-brand-footer">
+            Tindo Blazor Test Portal &nbsp;&middot;&nbsp; &copy; @_year
+        </div>
+    </aside>
+
+    @* ── Right sign-in card ── *@
+    <main class="lgn-panel">
+        <div class="lgn-card">
+
+            <div class="lgn-card-head">
+                <div class="lgn-card-logo">
+                    <i class="fa-solid fa-bolt"></i>
+                </div>
+                <h2 class="lgn-card-title">Welcome back</h2>
+                <p class="lgn-card-sub">
+                    Sign in with your organisation Microsoft account to continue.
+                </p>
+            </div>
+
+            @* ── Error / warning banner ── *@
+            @if (_error != LoginErrorCode.None)
+            {
+                <div class="lgn-alert @AlertCss" role="alert">
+                    <i class="fa-solid @AlertIcon lgn-alert-icon"></i>
+                    <div class="lgn-alert-body">
+                        <strong class="lgn-alert-title">@AlertTitle</strong>
+                        <span class="lgn-alert-msg">@AlertMessage</span>
+                    </div>
+                    <button class="lgn-alert-close" @onclick="ClearError" title="Dismiss">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            }
+
+            <div class="lgn-card-body">
+
+                @* Microsoft sign-in button *@
+                <button class="lgn-btn-ms" @onclick="SignIn" disabled="@_busy">
+                    @if (_busy)
+                    {
+                        <span class="lgn-spinner"></span>
+                        <span>Redirecting to Microsoft...</span>
+                    }
+                    else
+                    {
+                        <svg class="lgn-ms-grid" viewBox="0 0 21 21"
+                             xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+                            <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+                            <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+                            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                        </svg>
+                        <span>Sign in with Microsoft</span>
+                    }
+                </button>
+
+                <div class="lgn-note">
+                    <i class="fa-solid fa-circle-info lgn-note-icon"></i>
+                    <p>
+                        Use your <strong>organisation email</strong> address.
+                        Personal Microsoft accounts are not supported.
+                    </p>
+                </div>
+
+                <div class="lgn-divider">
+                    <span>Secured by Microsoft identity platform</span>
+                </div>
+
+                <div class="lgn-providers">
+                    <div class="lgn-provider-chip">
+                        <i class="fa-brands fa-microsoft"></i> Azure Active Directory
+                    </div>
+                    <div class="lgn-provider-chip">
+                        <i class="fa-solid fa-building"></i> Organisation accounts only
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="lgn-card-foot">
+                <i class="fa-solid fa-circle-question"></i>
+                Need help? Contact your
+                <a href="mailto:it@yourorg.com" class="lgn-foot-link">IT Administrator</a>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    bool           _busy  = false;
+    LoginErrorCode _error = LoginErrorCode.None;
+    int            _year  = DateTime.Now.Year;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Skip login page if already authenticated
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo(ReturnUrl ?? "/", replace: true);
+            return;
+        }
+
+        // Parse ?error= from query string (set by MSAL on failed redirect)
+        var errorValue = new Uri(Nav.Uri).Query
+            .TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Split('=', 2))
+            .Where(p => p.Length == 2 &&
+                        p[0].Equals("error", StringComparison.OrdinalIgnoreCase))
+            .Select(p => Uri.UnescapeDataString(p[1]))
+            .FirstOrDefault() ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(errorValue))
+        {
+            _error = errorValue switch
+            {
+                "access_denied"           => LoginErrorCode.AccessDenied,
+                "invalid_client"          => LoginErrorCode.InvalidConfig,
+                "interaction_required"    => LoginErrorCode.InteractionRequired,
+                "login_required"          => LoginErrorCode.LoginRequired,
+                "consent_required"        => LoginErrorCode.ConsentRequired,
+                "temporarily_unavailable" => LoginErrorCode.ServiceUnavailable,
+                "server_error"            => LoginErrorCode.ServiceUnavailable,
+                _                         => LoginErrorCode.Unknown
+            };
+        }
+    }
+
+    void SignIn()
+    {
+        _busy  = true;
+        _error = LoginErrorCode.None;
+        Nav.NavigateToLogin(
+            "authentication/login",
+            new InteractiveRequestOptions
+            {
+                Interaction = InteractionType.SignIn,
+                ReturnUrl   = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl
+            });
+    }
+
+    void ClearError() => _error = LoginErrorCode.None;
+
+    // ── Error helpers ─────────────────────────────────────────────────────────
+
+    enum LoginErrorCode
+    {
+        None, AccessDenied, InvalidConfig,
+        InteractionRequired, LoginRequired,
+        ConsentRequired, ServiceUnavailable, Unknown
+    }
+
+    string AlertCss   => _error == LoginErrorCode.AccessDenied ? "lgn-alert-warn" : "lgn-alert-err";
+    string AlertIcon  => _error == LoginErrorCode.AccessDenied ? "fa-triangle-exclamation" : "fa-circle-exclamation";
+
+    string AlertTitle => _error switch
+    {
+        LoginErrorCode.AccessDenied        => "Access Denied",
+        LoginErrorCode.InvalidConfig       => "Configuration Error",
+        LoginErrorCode.InteractionRequired => "Re-authentication Required",
+        LoginErrorCode.LoginRequired       => "Sign-In Required",
+        LoginErrorCode.ConsentRequired     => "Consent Required",
+        LoginErrorCode.ServiceUnavailable  => "Service Temporarily Unavailable",
+        _                                  => "Sign-In Failed"
+    };
+
+    string AlertMessage => _error switch
+    {
+        LoginErrorCode.AccessDenied =>
+            "Your account does not have permission to access this application. " +
+            "Please contact your IT Administrator to request access.",
+        LoginErrorCode.InvalidConfig =>
+            "This application is misconfigured (invalid_client). " +
+            "Please notify your IT Administrator.",
+        LoginErrorCode.InteractionRequired =>
+            "Your session has expired or additional verification is needed. " +
+            "Click Sign in with Microsoft to authenticate again.",
+        LoginErrorCode.LoginRequired =>
+            "You must sign in to access this portal. Click the button below to proceed.",
+        LoginErrorCode.ConsentRequired =>
+            "This application needs your consent to access your profile information. " +
+            "Please sign in again and accept the permissions when Microsoft prompts you.",
+        LoginErrorCode.ServiceUnavailable =>
+            "Microsoft authentication is temporarily unavailable. " +
+            "Please wait a few minutes and try again.",
+        _ =>
+            "An unexpected error occurred during sign-in. " +
+            "Please try again or contact your IT Administrator."
+    };
+}
+
+<style>
+.lgn-shell {
+    display: flex;
+    min-height: 100vh;
+    font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    background: var(--bg, #f0f3f8);
+}
+
+/* ── Left branding ── */
+.lgn-brand {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    flex: 1;
+    background: #345181;
+    position: relative;
+    overflow: hidden;
+}
+.lgn-brand::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(140deg, #1b2f50 0%, #345181 55%, #0e1e35 100%);
+}
+.lgn-brand::after {
+    content: '';
+    position: absolute; bottom: -120px; right: -100px;
+    width: 480px; height: 480px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(200,23,102,.22) 0%, transparent 68%);
+    pointer-events: none;
+}
+@@media (min-width: 900px) { .lgn-brand { display: flex; } }
+
+.lgn-brand-inner {
+    position: relative; z-index: 1;
+    padding: 56px 52px 32px;
+    display: flex; flex-direction: column;
+}
+.lgn-brand-logo {
+    width: 54px; height: 54px; border-radius: 14px;
+    background: #c81766;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 21px;
+    box-shadow: 0 6px 22px rgba(200,23,102,.45);
+    margin-bottom: 26px;
+}
+.lgn-brand-name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 32px; font-weight: 600; color: #fff; margin: 0 0 3px;
+}
+.lgn-brand-tag {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 2.5px;
+    color: rgba(255,255,255,.32); margin: 0 0 22px; text-transform: uppercase;
+}
+.lgn-brand-desc {
+    font-size: 14.5px; line-height: 1.75; color: rgba(255,255,255,.58);
+    margin: 0 0 36px; max-width: 340px;
+}
+.lgn-features {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 13px;
+}
+.lgn-features li {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13.5px; color: rgba(255,255,255,.72);
+}
+.lgn-feat-icon {
+    width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+    background: rgba(255,255,255,.07);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #4ecdc4;
+}
+.lgn-brand-footer {
+    position: relative; z-index: 1;
+    padding: 20px 52px; font-size: 11px; color: rgba(255,255,255,.22);
+}
+
+/* ── Right panel ── */
+.lgn-panel {
+    flex: 0 0 100%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 32px 20px;
+}
+@@media (min-width: 900px) { .lgn-panel { flex: 0 0 460px; } }
+
+/* ── Card ── */
+.lgn-card {
+    width: 100%; max-width: 390px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.10);
+    overflow: hidden;
+}
+.lgn-card-head {
+    padding: 36px 30px 24px; text-align: center;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.lgn-card-logo {
+    width: 50px; height: 50px; border-radius: 13px; background: #c81766;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 19px;
+    box-shadow: 0 4px 16px rgba(200,23,102,.35); margin-bottom: 16px;
+}
+.lgn-card-title { font-size: 21px; font-weight: 700; color: var(--txt, #1e293b); margin: 0 0 6px; }
+.lgn-card-sub   { font-size: 13px; color: var(--txt-3, #94a3b8); margin: 0; line-height: 1.6; }
+
+/* ── Alert ── */
+.lgn-alert {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px 14px 14px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    border-left: 4px solid transparent;
+}
+.lgn-alert-warn { background: rgba(245,158,11,.07); border-left-color: #d97706; }
+.lgn-alert-err  { background: rgba(225,29,72,.07);  border-left-color: #e11d48; }
+.lgn-alert-icon { font-size: 15px; margin-top: 2px; flex-shrink: 0; }
+.lgn-alert-warn .lgn-alert-icon { color: #d97706; }
+.lgn-alert-err  .lgn-alert-icon { color: #e11d48; }
+.lgn-alert-body  { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.lgn-alert-title { font-size: 13px; font-weight: 700; color: var(--txt, #1e293b); display: block; }
+.lgn-alert-msg   { font-size: 12px; color: var(--txt-2, #475569); line-height: 1.55; }
+.lgn-alert-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--txt-3, #94a3b8); font-size: 12px;
+    width: 24px; height: 24px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    transition: background .12s, color .12s;
+}
+.lgn-alert-close:hover { background: var(--border, #e2e8f0); color: var(--txt, #1e293b); }
+
+/* ── Body ── */
+.lgn-card-body {
+    padding: 26px 30px;
+    display: flex; flex-direction: column; gap: 18px;
+}
+.lgn-btn-ms {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 13px 20px; background: #0078d4; color: #fff;
+    border: none; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 600;
+    font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    box-shadow: 0 2px 14px rgba(0,120,212,.28);
+    transition: background .15s, transform .1s;
+}
+.lgn-btn-ms:hover:not(:disabled)  { background: #006cbf; }
+.lgn-btn-ms:active:not(:disabled) { transform: scale(.98); }
+.lgn-btn-ms:disabled              { opacity: .65; cursor: not-allowed; }
+.lgn-ms-grid { width: 20px; height: 20px; flex-shrink: 0; }
+.lgn-spinner {
+    width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%;
+    border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff;
+    animation: lgn-spin .7s linear infinite;
+}
+@@keyframes lgn-spin { to { transform: rotate(360deg); } }
+
+.lgn-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--surface-2, #f7f9fc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px; padding: 11px 14px;
+    font-size: 12.5px; color: var(--txt-2, #475569); line-height: 1.6;
+    margin: 0;
+}
+.lgn-note-icon  { color: #04595a; font-size: 13px; margin-top: 2px; flex-shrink: 0; }
+.lgn-note p     { margin: 0; }
+.lgn-note strong{ color: var(--txt, #1e293b); font-weight: 600; }
+
+.lgn-divider {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: var(--txt-3, #94a3b8);
+}
+.lgn-divider::before,
+.lgn-divider::after { content: ''; flex: 1; height: 1px; background: var(--border, #e2e8f0); }
+
+.lgn-providers { display: flex; gap: 8px; flex-wrap: wrap; }
+.lgn-provider-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface-2, #f7f9fc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 11.5px; color: var(--txt-2, #475569);
+}
+
+/* ── Footer ── */
+.lgn-card-foot {
+    padding: 14px 30px 20px; text-align: center;
+    font-size: 12px; color: var(--txt-3, #94a3b8);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    border-top: 1px solid var(--border, #e2e8f0);
+}
+.lgn-foot-link { color: #c81766; font-weight: 600; text-decoration: none; }
+.lgn-foot-link:hover { text-decoration: underline; }
+</style>

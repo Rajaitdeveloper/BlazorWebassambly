@@ -1,0 +1,428 @@
+@* Pages/Profile/UserProfile.razor *@
+@* Shows all JWT claims and the raw access token for the signed-in user.
+   Useful during development to verify what Azure AD is returning.
+   Remove or [Authorize(Roles="Admin")] this page before going to production. *@
+@page "/profile"
+@attribute [Authorize]
+
+@inject AuthService          AuthSvc
+@inject IAccessTokenProvider TokenProvider
+
+<PageTitle>My Profile - Tindo Blazor</PageTitle>
+
+<div class="profile-page">
+
+    <div class="profile-header">
+        <div class="profile-avatar">@_initials</div>
+        <div>
+            <h1 class="profile-name">@_displayName</h1>
+            <p class="profile-email">@_email</p>
+            @if (!string.IsNullOrWhiteSpace(_tenantId))
+            {
+                <span class="profile-badge">
+                    <i class="fa-solid fa-building"></i> Tenant: @_tenantId
+                </span>
+            }
+            @if (!string.IsNullOrWhiteSpace(_objectId))
+            {
+                <span class="profile-badge profile-badge-teal">
+                    <i class="fa-solid fa-fingerprint"></i> OID: @_objectId
+                </span>
+            }
+        </div>
+    </div>
+
+    @* ── Roles ── *@
+    @if (_roles.Count > 0)
+    {
+        <div class="profile-section">
+            <div class="profile-section-title">
+                <i class="fa-solid fa-shield-halved"></i> App Roles
+            </div>
+            <div class="profile-chips">
+                @foreach (var role in _roles)
+                {
+                    <span class="profile-chip profile-chip-accent">@role</span>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── All Claims ── *@
+    <div class="profile-section">
+        <div class="profile-section-title">
+            <i class="fa-solid fa-tags"></i> JWT Claims
+            <span class="profile-count">@_claims.Count</span>
+        </div>
+        <div class="profile-table-wrap">
+            <table class="profile-table">
+                <thead>
+                    <tr>
+                        <th>Claim Type</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (type, value) in _claims)
+                    {
+                        <tr>
+                            <td class="claim-type">@type</td>
+                            <td class="claim-value">@value</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @* ── Access Token ── *@
+    <div class="profile-section">
+        <div class="profile-section-title">
+            <i class="fa-solid fa-key"></i> Access Token
+            @if (_tokenExpiry.HasValue)
+            {
+                <span class="profile-expiry @(_tokenExpired ? "expired" : "valid")">
+                    <i class="fa-solid @(_tokenExpired ? "fa-circle-xmark" : "fa-circle-check")"></i>
+                    @(_tokenExpired ? "Expired" : "Valid until") @_tokenExpiry.Value.ToLocalTime().ToString("HH:mm:ss dd MMM yyyy")
+                </span>
+            }
+        </div>
+
+        @if (_tokenError is not null)
+        {
+            <div class="token-error">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                @_tokenError
+            </div>
+        }
+        else if (_accessToken is not null)
+        {
+            <div class="token-box">
+                <div class="token-actions">
+                    <span class="token-hint">
+                        Use as: <code>Authorization: Bearer &lt;token&gt;</code>
+                    </span>
+                    <button class="btn btn-ghost btn-sm" @onclick="CopyToken" title="Copy to clipboard">
+                        <i class="fa-solid @(_copied ? "fa-check" : "fa-copy")"></i>
+                        @(_copied ? "Copied!" : "Copy")
+                    </button>
+                </div>
+                <pre class="token-raw">@_accessToken</pre>
+            </div>
+
+            @* Decoded JWT sections *@
+            @if (_jwtPayload is not null)
+            {
+                <div class="profile-section-title" style="margin-top:16px">
+                    <i class="fa-solid fa-code"></i> Decoded Payload
+                </div>
+                <pre class="token-raw token-json">@_jwtPayload</pre>
+            }
+        }
+        else
+        {
+            <div class="token-error token-info">
+                <i class="fa-solid fa-circle-info"></i>
+                No access token available. To retrieve an access token for an API,
+                add a scope to <code>DefaultAccessTokenScopes</code> in Program.cs,
+                e.g. <code>api://YOUR-API-CLIENT-ID/access_as_user</code>
+            </div>
+        }
+    </div>
+
+    @* ── How to use in components ── *@
+    <div class="profile-section">
+        <div class="profile-section-title">
+            <i class="fa-solid fa-book"></i> How to use in your components
+        </div>
+        <div class="code-tabs">
+            <div class="code-tab-label">Get claims in any .razor component</div>
+            <pre class="code-block">@@inject AuthService AuthSvc
+
+&lt;AuthorizeView&gt;
+    &lt;Authorized Context="auth"&gt;
+        @@* Via AuthService static helpers *@@
+        &lt;p&gt;Name:  @@AuthService.GetDisplayName(auth.User)&lt;/p&gt;
+        &lt;p&gt;Email: @@AuthService.GetEmail(auth.User)&lt;/p&gt;
+        &lt;p&gt;OID:   @@AuthService.GetObjectId(auth.User)&lt;/p&gt;
+
+        @@* Any arbitrary claim *@@
+        &lt;p&gt;Tenant: @@AuthService.GetClaim(auth.User, "tid")&lt;/p&gt;
+
+        @@* Check a role *@@
+        @@if (AuthService.HasRole(auth.User, "Admin")) { &lt;span&gt;Admin&lt;/span&gt; }
+    &lt;/Authorized&gt;
+&lt;/AuthorizeView&gt;</pre>
+
+            <div class="code-tab-label" style="margin-top:16px">Get access token in a service or component</div>
+            <pre class="code-block">@@inject AuthService AuthSvc
+
+@@code {
+    async Task CallApi()
+    {
+        // Simple string token
+        var token = await AuthSvc.GetAccessTokenAsync();
+
+        // With specific scopes
+        var token2 = await AuthSvc.GetAccessTokenAsync(
+            ["api://YOUR-API-CLIENT-ID/access_as_user"]);
+
+        // Full token object (includes Expires, GrantedScopes)
+        var tokenObj = await AuthSvc.GetAccessTokenObjectAsync();
+        Console.WriteLine(tokenObj?.Expires);
+    }
+}</pre>
+
+            <div class="code-tab-label" style="margin-top:16px">Call a protected API (auto-attaches Bearer token)</div>
+            <pre class="code-block">@@inject IHttpClientFactory HttpFactory
+
+@@code {
+    async Task CallProtectedApi()
+    {
+        // "BlazoreApi" client is pre-configured in Program.cs
+        // with AuthorizationMessageHandler — token attached automatically
+        var client = HttpFactory.CreateClient("BlazoreApi");
+        var data   = await client.GetFromJsonAsync&lt;MyDto&gt;("/api/endpoint");
+    }
+}</pre>
+
+            <div class="code-tab-label" style="margin-top:16px">CascadingAuthenticationState — in any layout or page</div>
+            <pre class="code-block">@@* Already in App.razor — available everywhere *@@
+&lt;CascadingAuthenticationState&gt;
+    ...
+&lt;/CascadingAuthenticationState&gt;
+
+@@* Access in @@code block *@@
+[CascadingParameter] Task&lt;AuthenticationState&gt;? AuthStateTask { get; set; }
+
+protected override async Task OnInitializedAsync()
+{
+    var state = await AuthStateTask!;
+    var user  = state.User;
+    var name  = AuthService.GetDisplayName(user);
+    var oid   = AuthService.GetObjectId(user);
+}</pre>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    [CascadingParameter] Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    string                       _displayName = string.Empty;
+    string                       _email       = string.Empty;
+    string                       _initials    = "?";
+    string                       _tenantId    = string.Empty;
+    string                       _objectId    = string.Empty;
+    List<string>                 _roles       = [];
+    List<(string Type, string Value)> _claims = [];
+
+    string?   _accessToken = null;
+    string?   _jwtPayload  = null;
+    string?   _tokenError  = null;
+    DateTimeOffset? _tokenExpiry = null;
+    bool      _tokenExpired = false;
+    bool      _copied       = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateTask!;
+        var user  = state.User;
+
+        _displayName = AuthService.GetDisplayName(user);
+        _email       = AuthService.GetEmail(user);
+        _initials    = AuthService.GetInitials(user);
+        _tenantId    = AuthService.GetTenantId(user);
+        _objectId    = AuthService.GetObjectId(user);
+        _roles       = AuthService.GetRoles(user).ToList();
+        _claims      = AuthService.GetAllClaims(user);
+
+        // Try to get access token
+        try
+        {
+            var tokenObj = await AuthSvc.GetAccessTokenObjectAsync();
+            if (tokenObj is not null)
+            {
+                _accessToken  = tokenObj.Value;
+                _tokenExpiry  = tokenObj.Expires;
+                _tokenExpired = tokenObj.Expires.UtcDateTime < DateTime.UtcNow;
+                _jwtPayload   = DecodeJwtPayload(tokenObj.Value);
+            }
+            else
+            {
+                _tokenError = "No access token returned. Add an API scope to DefaultAccessTokenScopes in Program.cs.";
+            }
+        }
+        catch (AccessTokenNotAvailableException ex)
+        {
+            // Token not available — redirect to login to get consent for the scope
+            ex.Redirect();
+        }
+        catch (Exception ex)
+        {
+            _tokenError = $"Could not retrieve access token: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Decodes and pretty-prints the JWT payload section (middle part).
+    /// Does NOT verify the signature — client-side only, for debugging.
+    /// </summary>
+    static string? DecodeJwtPayload(string jwt)
+    {
+        try
+        {
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return null;
+
+            var payload = parts[1];
+            // Base64url → Base64
+            var padded  = payload.Replace('-', '+').Replace('_', '/');
+            switch (padded.Length % 4)
+            {
+                case 2: padded += "=="; break;
+                case 3: padded += "=";  break;
+            }
+            var bytes   = Convert.FromBase64String(padded);
+            var json    = System.Text.Encoding.UTF8.GetString(bytes);
+
+            // Pretty-print
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            return System.Text.Json.JsonSerializer.Serialize(
+                doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    async Task CopyToken()
+    {
+        if (_accessToken is null) return;
+        // Copy via clipboard API (requires JS interop — simplified here)
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copied = false;
+        StateHasChanged();
+    }
+}
+
+<style>
+    .profile-page {
+        padding: 28px 32px;
+        max-width: 900px;
+        display: flex; flex-direction: column; gap: 24px;
+    }
+
+    /* ── Header ── */
+    .profile-header {
+        display: flex; align-items: center; gap: 20px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); padding: 24px 28px;
+        box-shadow: var(--shadow-sm);
+    }
+    .profile-avatar {
+        width: 64px; height: 64px; flex-shrink: 0; border-radius: 50%;
+        background: var(--accent); color: #fff;
+        font-size: 22px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .profile-name  { font-size: 20px; font-weight: 700; color: var(--txt); margin: 0 0 3px; }
+    .profile-email { font-size: 13px; color: var(--txt-3); margin: 0 0 8px; }
+    .profile-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: var(--accent-faint); color: var(--accent);
+        font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+        margin-right: 6px;
+    }
+    .profile-badge-teal { background: var(--teal-faint); color: var(--teal); }
+
+    /* ── Section ── */
+    .profile-section {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); padding: 20px 24px;
+        box-shadow: var(--shadow-sm);
+        display: flex; flex-direction: column; gap: 14px;
+    }
+    .profile-section-title {
+        display: flex; align-items: center; gap: 9px;
+        font-size: 11.5px; font-weight: 700; letter-spacing: .5px;
+        text-transform: uppercase; color: var(--txt-2);
+    }
+    .profile-section-title i { color: var(--accent); }
+    .profile-count {
+        background: var(--accent-faint); color: var(--accent);
+        font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px;
+    }
+    .profile-expiry {
+        margin-left: auto; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .profile-expiry.valid   { color: var(--teal); }
+    .profile-expiry.expired { color: #e11d48; }
+
+    /* ── Roles chips ── */
+    .profile-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .profile-chip  {
+        display: inline-flex; align-items: center;
+        font-size: 12px; font-weight: 600;
+        padding: 4px 12px; border-radius: 20px;
+    }
+    .profile-chip-accent { background: var(--accent-faint); color: var(--accent); }
+
+    /* ── Claims table ── */
+    .profile-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+    .profile-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .profile-table th {
+        background: var(--surface-2); padding: 9px 14px;
+        font-size: 11px; font-weight: 700; letter-spacing: .4px;
+        text-transform: uppercase; color: var(--txt-2);
+        border-bottom: 1px solid var(--border); text-align: left;
+    }
+    .profile-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .profile-table tr:last-child td { border-bottom: none; }
+    .profile-table tr:hover td { background: var(--surface-2); }
+    .claim-type  { font-weight: 600; color: var(--accent); white-space: nowrap; width: 220px; }
+    .claim-value { color: var(--txt); word-break: break-all; font-family: monospace; font-size: 12.5px; }
+
+    /* ── Token ── */
+    .token-error {
+        background: rgba(225,29,72,.06); border: 1px solid rgba(225,29,72,.2);
+        border-radius: var(--radius); padding: 12px 16px;
+        font-size: 13px; color: #e11d48;
+        display: flex; align-items: flex-start; gap: 9px; line-height: 1.6;
+    }
+    .token-info { background: var(--surface-2); border-color: var(--border); color: var(--txt-2); }
+    .token-error code { font-family: monospace; background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 3px; }
+
+    .token-box { display: flex; flex-direction: column; gap: 10px; }
+    .token-actions {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        flex-wrap: wrap;
+    }
+    .token-hint { font-size: 12px; color: var(--txt-3); }
+    .token-hint code { font-family: monospace; background: var(--surface-2);
+                       border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; }
+
+    .token-raw {
+        background: #0f172a; color: #e2e8f0; font-size: 11px; font-family: monospace;
+        padding: 14px 16px; border-radius: var(--radius); overflow-x: auto;
+        white-space: pre-wrap; word-break: break-all; line-height: 1.7; max-height: 180px;
+        border: 1px solid #1e293b;
+    }
+    .token-json { max-height: 360px; color: #7dd3fc; }
+
+    /* ── Code examples ── */
+    .code-tabs { display: flex; flex-direction: column; gap: 8px; }
+    .code-tab-label { font-size: 11.5px; font-weight: 700; color: var(--txt-2); padding: 4px 0; }
+    .code-block {
+        background: #0f172a; color: #e2e8f0; font-size: 12px; font-family: monospace;
+        padding: 14px 16px; border-radius: var(--radius); overflow-x: auto;
+        white-space: pre; line-height: 1.7; border: 1px solid #1e293b;
+    }
+</style>

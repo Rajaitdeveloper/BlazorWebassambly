@@ -1,190 +1,211 @@
 @* Shared/Components/AccessRequestForm.razor *@
-@* Access request form — Project, Scripts (multi-select), UserId, Env flag, Access type *@
+@* Uses global classes from forms.css — no scoped styles *@
 
-<div class="arf-card">
+<div class="form-card">
 
-    <div class="arf-header">
-        <div class="arf-header-icon">
+    <div class="form-card-header">
+        <div class="form-card-icon">
             <i class="fa-solid fa-key"></i>
         </div>
         <div>
-            <h2 class="arf-title">Access Request</h2>
-            <p class="arf-subtitle">Grant or revoke user access to project scripts</p>
+            <h2 class="form-card-title">Access Request</h2>
+            <p class="form-card-subtitle">Grant or revoke user access to project scripts</p>
         </div>
     </div>
 
-    <div class="arf-body">
+    <div class="form-card-body">
 
-        @* ── 1. Project Name ── *@
-        <div class="arf-field">
-            <label class="arf-label" for="arf-project">
-                Project Name
-                <span class="arf-required">*</span>
-            </label>
-            <div class="arf-select-wrap">
-                <select id="arf-project" class="arf-select" @bind="_projectName">
-                    <option value="">— Select project —</option>
-                    @foreach (var p in _projects)
-                    {
-                        <option value="@p">@p</option>
-                    }
-                </select>
-                <i class="fa-solid fa-chevron-down arf-select-chev"></i>
+        @* ── Group 1: Project details (2 columns) ── *@
+        <div class="field-group">
+            <div class="field-group-header">
+                <i class="fa-solid fa-folder-open field-group-icon"></i>
+                <span class="field-group-title">Project Details</span>
             </div>
-        </div>
+            <div class="field-group-body">
 
-        @* ── 2. Script Name (multi-select with checkboxes) ── *@
-        <div class="arf-field">
-            <label class="arf-label">
-                Script Name
-                <span class="arf-required">*</span>
-            </label>
-            <div class="arf-multiselect @(_scriptOpen ? "open" : "")" id="arf-scripts">
+                <div class="form-row col-2">
 
-                @* Trigger button *@
-                <button type="button" class="arf-ms-trigger" @onclick="ToggleScripts">
-                    <span class="arf-ms-value">
-                        @if (_selectedScripts.Count == 0)
-                        {
-                            <span class="arf-ms-placeholder">— Select scripts —</span>
-                        }
-                        else if (_selectedScripts.Count == _scripts.Count)
-                        {
-                            <span class="arf-ms-tag">All scripts selected</span>
-                        }
-                        else
-                        {
-                            @foreach (var s in _selectedScripts)
-                            {
-                                <span class="arf-ms-tag">@s</span>
-                            }
-                        }
-                    </span>
-                    <i class="fa-solid fa-chevron-down arf-ms-chev"></i>
-                </button>
-
-                @* Dropdown panel *@
-                @if (_scriptOpen)
-                {
-                    <div class="arf-ms-panel">
-                        @* Select / Unselect all *@
-                        <label class="arf-ms-item arf-ms-all">
-                            <input type="checkbox"
-                                   class="arf-cb"
-                                   checked="@(_selectedScripts.Count == _scripts.Count)"
-                                   @onchange="ToggleAll" />
-                            <span class="arf-cb-box"></span>
-                            <span class="arf-ms-item-label">
-                                @(_selectedScripts.Count == _scripts.Count ? "Unselect all" : "Select all")
-                            </span>
+                    @* 1. Project Name *@
+                    <div class="field">
+                        <label class="field-label" for="project">
+                            Project Name <span class="field-required">*</span>
                         </label>
-                        <div class="arf-ms-divider"></div>
-                        @foreach (var script in _scripts)
-                        {
-                            var s = script;
-                            <label class="arf-ms-item">
-                                <input type="checkbox"
-                                       class="arf-cb"
-                                       checked="@_selectedScripts.Contains(s)"
-                                       @onchange="e => ToggleScript(s, (bool)e.Value!)" />
-                                <span class="arf-cb-box"></span>
-                                <span class="arf-ms-item-label">@s</span>
-                            </label>
-                        }
+                        <div class="select-wrap">
+                            <select id="project" class="form-select" @bind="_projectName">
+                                <option value="">— Select project —</option>
+                                @foreach (var p in _projects)
+                                {
+                                    <option value="@p">@p</option>
+                                }
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-chev"></i>
+                        </div>
                     </div>
-                }
+
+                    @* 2. Script Name *@
+                    <div class="field">
+                        <label class="field-label">
+                            Script Name <span class="field-required">*</span>
+                        </label>
+                        <div class="ms-wrap @(_scriptOpen ? "open" : "")">
+                            <button type="button" class="ms-trigger" @onclick="ToggleScripts">
+                                <span class="ms-value">
+                                    @if (_selectedScripts.Count == 0)
+                                    {
+                                        <span class="ms-placeholder">— Select scripts —</span>
+                                    }
+                                    else if (_selectedScripts.Count == _scripts.Count)
+                                    {
+                                        <span class="ms-tag">All selected</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var s in _selectedScripts)
+                                        {
+                                            <span class="ms-tag">@s</span>
+                                        }
+                                    }
+                                </span>
+                                <i class="fa-solid fa-chevron-down ms-chev"></i>
+                            </button>
+                            @if (_scriptOpen)
+                            {
+                                <div class="ms-panel">
+                                    <label class="ms-item ms-item-all">
+                                        <input type="checkbox" class="cb-input"
+                                               checked="@(_selectedScripts.Count == _scripts.Count)"
+                                               @onchange="ToggleAll" />
+                                        <span class="cb-box"></span>
+                                        <span class="ms-item-label">
+                                            @(_selectedScripts.Count == _scripts.Count ? "Unselect all" : "Select all")
+                                        </span>
+                                    </label>
+                                    <div class="ms-divider"></div>
+                                    @foreach (var script in _scripts)
+                                    {
+                                        var s = script;
+                                        <label class="ms-item">
+                                            <input type="checkbox" class="cb-input"
+                                                   checked="@_selectedScripts.Contains(s)"
+                                                   @onchange="e => ToggleScript(s, (bool)e.Value!)" />
+                                            <span class="cb-box"></span>
+                                            <span class="ms-item-label">@s</span>
+                                        </label>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
 
-        @* ── 3. User ID ── *@
-        <div class="arf-field">
-            <label class="arf-label" for="arf-userid">
-                User ID
-                <span class="arf-required">*</span>
-            </label>
-            <div class="arf-input-wrap">
-                <i class="fa-solid fa-user arf-input-icon"></i>
-                <input id="arf-userid"
-                       type="text"
-                       class="arf-input"
-                       placeholder="Enter user ID"
-                       @bind="_userId"
-                       @bind:event="oninput" />
-                @if (!string.IsNullOrWhiteSpace(_userId))
-                {
-                    <button type="button" class="arf-input-clear" @onclick="() => _userId = string.Empty" title="Clear">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                }
+        @* ── Group 2: User details (3 columns) ── *@
+        <div class="field-group">
+            <div class="field-group-header">
+                <i class="fa-solid fa-user field-group-icon"></i>
+                <span class="field-group-title">User Details</span>
+            </div>
+            <div class="field-group-body">
+
+                <div class="form-row col-3">
+
+                    @* 3. User ID *@
+                    <div class="field">
+                        <label class="field-label" for="userid">
+                            User ID <span class="field-required">*</span>
+                        </label>
+                        <div class="input-wrap">
+                            <i class="fa-solid fa-user input-icon"></i>
+                            <input id="userid" type="text"
+                                   class="form-input has-clear"
+                                   placeholder="Enter user ID"
+                                   @bind="_userId" @bind:event="oninput" />
+                            @if (!string.IsNullOrWhiteSpace(_userId))
+                            {
+                                <button type="button" class="input-clear"
+                                        @onclick="() => _userId = string.Empty">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @* 4. Environment (spans remaining 2 cols) *@
+                    <div class="field span-2">
+                        <label class="field-label">Environment Options</label>
+                        <label class="toggle-row">
+                            <input type="checkbox" class="toggle-input" @bind="_applyAllEnv" />
+                            <span class="toggle-track">
+                                <span class="toggle-thumb"></span>
+                            </span>
+                            <div class="toggle-text">
+                                <span class="toggle-label">Apply to all lower environments</span>
+                                <span class="toggle-hint">Propagates changes to DEV, SIT, and UAT</span>
+                            </div>
+                        </label>
+                    </div>
+
+                </div>
             </div>
         </div>
 
-        @* ── 4. Apply to all lower environments ── *@
-        <div class="arf-field">
-            <label class="arf-toggle-row">
-                <div class="arf-toggle-wrap">
-                    <input type="checkbox" class="arf-toggle-input" @bind="_applyAllEnv" />
-                    <span class="arf-toggle-track">
-                        <span class="arf-toggle-thumb"></span>
-                    </span>
-                </div>
-                <div class="arf-toggle-text">
-                    <span class="arf-toggle-label">Apply to all lower environments</span>
-                    <span class="arf-toggle-hint">Propagates access changes to DEV, SIT, and UAT</span>
-                </div>
-            </label>
-        </div>
+        @* ── Group 3: Access type ── *@
+        <div class="field-group">
+            <div class="field-group-header">
+                <i class="fa-solid fa-shield-halved field-group-icon"></i>
+                <span class="field-group-title">Access Type</span>
+            </div>
+            <div class="field-group-body">
 
-        @* ── 5. Access Type (Radio) ── *@
-        <div class="arf-field">
-            <label class="arf-label">Access Type <span class="arf-required">*</span></label>
-            <div class="arf-radio-group">
-                <label class="arf-radio @(_accessType == "grant" ? "selected" : "")">
-                    <input type="radio" name="arf-access" value="grant"
-                           checked="@(_accessType == "grant")"
-                           @onchange='() => _accessType = "grant"' />
-                    <span class="arf-radio-ring"></span>
-                    <span class="arf-radio-icon grant"><i class="fa-solid fa-circle-check"></i></span>
-                    <span class="arf-radio-text">
-                        <span class="arf-radio-label">Grant Access</span>
-                        <span class="arf-radio-hint">Allow user to run selected scripts</span>
-                    </span>
-                </label>
+                @* 5. Radio — horizontal layout *@
+                <div class="field">
+                    <label class="field-label">Select action <span class="field-required">*</span></label>
+                    <div class="radio-group horizontal">
+                        <label class="radio-card @(_accessType == "grant" ? "selected" : "")">
+                            <input type="radio" name="access-type" value="grant"
+                                   @onchange='() => _accessType = "grant"' />
+                            <span class="radio-ring"></span>
+                            <span class="radio-icon icon-teal"><i class="fa-solid fa-circle-check"></i></span>
+                            <div class="radio-text">
+                                <span class="radio-label">Grant Access</span>
+                                <span class="radio-hint">Allow user to run scripts</span>
+                            </div>
+                        </label>
+                        <label class="radio-card @(_accessType == "revoke" ? "selected" : "")">
+                            <input type="radio" name="access-type" value="revoke"
+                                   @onchange='() => _accessType = "revoke"' />
+                            <span class="radio-ring"></span>
+                            <span class="radio-icon icon-accent"><i class="fa-solid fa-ban"></i></span>
+                            <div class="radio-text">
+                                <span class="radio-label">Revoke Access</span>
+                                <span class="radio-hint">Remove user's access</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
 
-                <label class="arf-radio @(_accessType == "revoke" ? "selected" : "")">
-                    <input type="radio" name="arf-access" value="revoke"
-                           checked="@(_accessType == "revoke")"
-                           @onchange='() => _accessType = "revoke"' />
-                    <span class="arf-radio-ring"></span>
-                    <span class="arf-radio-icon revoke"><i class="fa-solid fa-ban"></i></span>
-                    <span class="arf-radio-text">
-                        <span class="arf-radio-label">Revoke Access</span>
-                        <span class="arf-radio-hint">Remove user's access to selected scripts</span>
-                    </span>
-                </label>
             </div>
         </div>
 
     </div>
 
-    @* ── Actions ── *@
-    <div class="arf-footer">
-        <button type="button" class="arf-btn-ghost" @onclick="Reset">
+    <div class="form-card-footer">
+        <button type="button" class="btn btn-ghost" @onclick="Reset">
             <i class="fa-solid fa-rotate-left"></i> Reset
         </button>
         <button type="button"
-                class="arf-btn-primary @(_accessType == "revoke" ? "danger" : "")"
+                class="btn @(_accessType == "revoke" ? "btn-danger" : "btn-primary")"
                 disabled="@(!IsValid)"
                 @onclick="Submit">
             @if (_accessType == "revoke")
             {
-                <i class="fa-solid fa-ban"></i>
-                <span>Revoke Access</span>
+                <i class="fa-solid fa-ban"></i><span>Revoke Access</span>
             }
             else
             {
-                <i class="fa-solid fa-circle-check"></i>
-                <span>Grant Access</span>
+                <i class="fa-solid fa-circle-check"></i><span>Grant Access</span>
             }
         </button>
     </div>
@@ -192,17 +213,15 @@
 </div>
 
 @code {
-    // ── Data ────────────────────────────────────────────────────
     readonly List<string> _projects = ["Utilities", "Insurance"];
     readonly List<string> _scripts  = ["Billing", "Benefit"];
 
-    // ── State ───────────────────────────────────────────────────
-    string       _projectName  = string.Empty;
+    string       _projectName     = string.Empty;
     List<string> _selectedScripts = [];
-    string       _userId       = string.Empty;
-    bool         _applyAllEnv  = false;
-    string       _accessType   = "grant";
-    bool         _scriptOpen   = false;
+    string       _userId          = string.Empty;
+    bool         _applyAllEnv     = false;
+    string       _accessType      = "grant";
+    bool         _scriptOpen      = false;
 
     bool IsValid =>
         !string.IsNullOrWhiteSpace(_projectName) &&
@@ -214,8 +233,9 @@
 
     void ToggleAll(ChangeEventArgs e)
     {
-        bool check = (bool)e.Value!;
-        _selectedScripts = check ? new List<string>(_scripts) : [];
+        _selectedScripts = (bool)e.Value!
+            ? new List<string>(_scripts)
+            : [];
     }
 
     void ToggleScript(string script, bool selected)
@@ -240,331 +260,6 @@
     {
         if (!IsValid) return;
         // TODO: wire to service / API call
-        // e.g. await AccessService.SubmitAsync(new AccessRequest { ... });
         Reset();
     }
 }
-
-<style>
-   
-    .arf-card {
-        background: var(--surface);
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border);
-        box-shadow: var(--shadow-md);
-        overflow: visible;
-    }
-
-    /* ── Header ── */
-    .arf-header {
-        display: flex; align-items: center; gap: 14px;
-        padding: 20px 24px 18px;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .arf-header-icon {
-        width: 42px; height: 42px; border-radius: var(--radius);
-        background: var(--accent-faint);
-        display: flex; align-items: center; justify-content: center;
-        color: var(--accent); font-size: 16px; flex-shrink: 0;
-    }
-
-    .arf-title    { font-size: 16px; font-weight: 700; color: var(--txt);   margin: 0; line-height: 1.3; }
-    .arf-subtitle { font-size: 12px; color: var(--txt-3); margin: 2px 0 0; }
-
-    /* ── Body ── */
-    .arf-body { padding: 22px 24px; display: flex; flex-direction: column; gap: 20px; }
-
-    /* ── Field wrapper ── */
-    .arf-field { display: flex; flex-direction: column; gap: 7px; }
-
-    .arf-label {
-        font-size: 12.5px; font-weight: 600;
-        color: var(--txt-2); letter-spacing: .2px;
-    }
-
-    .arf-required { color: var(--accent); margin-left: 3px; }
-
-    /* ── Select ── */
-    .arf-select-wrap { position: relative; }
-
-    .arf-select {
-        width: 100%;
-        appearance: none; -webkit-appearance: none;
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 9px 36px 9px 12px;
-        font-size: 13.5px; font-family: var(--font);
-        color: var(--txt);
-        cursor: pointer;
-        transition: border-color .15s, box-shadow .15s;
-        outline: none;
-    }
-
-    .arf-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
-
-    .arf-select-chev {
-        position: absolute; right: 12px; top: 50%;
-        transform: translateY(-50%);
-        font-size: 11px; color: var(--txt-3);
-        pointer-events: none;
-    }
-
-    /* ── Multi-select ── */
-    .arf-multiselect { position: relative; }
-
-    .arf-ms-trigger {
-        width: 100%; display: flex; align-items: center;
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 8px 12px;
-        cursor: pointer; text-align: left;
-        transition: border-color .15s, box-shadow .15s;
-        font-family: var(--font);
-    }
-
-    .arf-multiselect.open .arf-ms-trigger {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--accent-faint);
-        border-radius: var(--radius) var(--radius) 0 0;
-    }
-
-    .arf-ms-value { flex: 1; display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; align-items: center; }
-
-    .arf-ms-placeholder { font-size: 13.5px; color: var(--txt-3); }
-
-    .arf-ms-tag {
-        font-size: 12px; font-weight: 600;
-        background: var(--accent-faint); color: var(--accent);
-        padding: 2px 9px; border-radius: 20px;
-    }
-
-    .arf-ms-chev {
-        font-size: 11px; color: var(--txt-3); flex-shrink: 0; margin-left: 8px;
-        transition: transform .2s;
-    }
-
-    .arf-multiselect.open .arf-ms-chev { transform: rotate(180deg); }
-
-    .arf-ms-panel {
-        position: absolute; top: 100%; left: 0; right: 0;
-        background: var(--surface);
-        border: 1px solid var(--accent);
-        border-top: none;
-        border-radius: 0 0 var(--radius) var(--radius);
-        box-shadow: var(--shadow-md);
-        z-index: 500;
-        padding: 6px 0;
-    }
-
-    .arf-ms-divider { height: 1px; background: var(--border); margin: 4px 0; }
-
-    .arf-ms-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 8px 14px; cursor: pointer;
-        transition: background .12s;
-    }
-
-    .arf-ms-item:hover { background: var(--surface-2); }
-
-    .arf-ms-all .arf-ms-item-label { font-weight: 700; color: var(--accent); font-size: 12.5px; }
-
-    .arf-ms-item-label { font-size: 13.5px; color: var(--txt); }
-
-    /* Custom checkbox */
-    .arf-cb { display: none; }
-
-    .arf-cb-box {
-        width: 17px; height: 17px; flex-shrink: 0;
-        border: 2px solid var(--border);
-        border-radius: 4px;
-        background: var(--surface-2);
-        display: flex; align-items: center; justify-content: center;
-        transition: border-color .15s, background .15s;
-        position: relative;
-    }
-
-    .arf-cb:checked + .arf-cb-box {
-        background: var(--accent);
-        border-color: var(--accent);
-    }
-
-    .arf-cb:checked + .arf-cb-box::after {
-        content: '';
-        width: 9px; height: 5px;
-        border-left: 2px solid #fff;
-        border-bottom: 2px solid #fff;
-        transform: rotate(-45deg) translate(1px, -1px);
-        display: block;
-    }
-
-    /* ── Text input ── */
-    .arf-input-wrap { position: relative; display: flex; align-items: center; }
-
-    .arf-input-icon {
-        position: absolute; left: 12px;
-        font-size: 12px; color: var(--txt-3);
-        pointer-events: none;
-    }
-
-    .arf-input {
-        width: 100%;
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 9px 36px 9px 34px;
-        font-size: 13.5px; font-family: var(--font);
-        color: var(--txt);
-        outline: none;
-        transition: border-color .15s, box-shadow .15s;
-    }
-
-    .arf-input::placeholder { color: var(--txt-3); }
-    .arf-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
-
-    .arf-input-clear {
-        position: absolute; right: 10px;
-        background: none; border: none; cursor: pointer;
-        color: var(--txt-3); font-size: 12px;
-        width: 22px; height: 22px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 50%;
-        transition: background .12s, color .12s;
-    }
-
-    .arf-input-clear:hover { background: var(--surface-2); color: var(--txt); }
-
-    /* ── Toggle switch ── */
-    .arf-toggle-row {
-        display: flex; align-items: flex-start; gap: 12px;
-        cursor: pointer;
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 12px 14px;
-        transition: border-color .15s;
-    }
-
-    .arf-toggle-row:hover { border-color: var(--accent); }
-
-    .arf-toggle-wrap { flex-shrink: 0; margin-top: 1px; }
-
-    .arf-toggle-input { display: none; }
-
-    .arf-toggle-track {
-        display: block;
-        width: 38px; height: 22px;
-        border-radius: 11px;
-        background: var(--border);
-        position: relative;
-        transition: background .2s;
-        cursor: pointer;
-    }
-
-    .arf-toggle-input:checked ~ .arf-toggle-track { background: var(--accent); }
-
-    .arf-toggle-thumb {
-        position: absolute; top: 3px; left: 3px;
-        width: 16px; height: 16px; border-radius: 50%;
-        background: #fff;
-        box-shadow: 0 1px 4px rgba(0,0,0,.2);
-        transition: transform .2s;
-    }
-
-    .arf-toggle-input:checked ~ .arf-toggle-track .arf-toggle-thumb { transform: translateX(16px); }
-
-    .arf-toggle-text { display: flex; flex-direction: column; gap: 2px; }
-    .arf-toggle-label { font-size: 13.5px; font-weight: 600; color: var(--txt); }
-    .arf-toggle-hint  { font-size: 11.5px; color: var(--txt-3); }
-
-    /* ── Radio group ── */
-    .arf-radio-group { display: flex; flex-direction: column; gap: 10px; }
-
-    .arf-radio {
-        display: flex; align-items: center; gap: 12px;
-        padding: 12px 14px;
-        background: var(--surface-2);
-        border: 2px solid var(--border);
-        border-radius: var(--radius);
-        cursor: pointer;
-        transition: border-color .15s, background .15s;
-        position: relative;
-    }
-
-    .arf-radio input[type="radio"] { display: none; }
-
-    .arf-radio:hover { border-color: var(--accent); }
-
-    .arf-radio.selected { border-color: var(--accent); background: var(--accent-faint); }
-
-    .arf-radio-ring {
-        width: 18px; height: 18px; flex-shrink: 0;
-        border: 2px solid var(--border);
-        border-radius: 50%;
-        background: var(--surface);
-        transition: border-color .15s;
-        position: relative;
-    }
-
-    .arf-radio.selected .arf-radio-ring { border-color: var(--accent); }
-
-    .arf-radio.selected .arf-radio-ring::after {
-        content: '';
-        position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        width: 8px; height: 8px;
-        border-radius: 50%;
-        background: var(--accent);
-    }
-
-    .arf-radio-icon {
-        width: 32px; height: 32px; flex-shrink: 0;
-        border-radius: var(--radius);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 14px;
-    }
-
-    .arf-radio-icon.grant  { background: var(--teal-faint);   color: var(--teal); }
-    .arf-radio-icon.revoke { background: rgba(200,23,102,.10); color: var(--accent); }
-
-    .arf-radio-text { display: flex; flex-direction: column; gap: 2px; }
-    .arf-radio-label { font-size: 13.5px; font-weight: 600; color: var(--txt); }
-    .arf-radio-hint  { font-size: 11.5px; color: var(--txt-3); }
-
-    /* ── Footer ── */
-    .arf-footer {
-        display: flex; justify-content: flex-end; align-items: center; gap: 10px;
-        padding: 16px 24px;
-        border-top: 1px solid var(--border);
-        background: var(--surface-2);
-        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-    }
-
-    .arf-btn-ghost {
-        display: flex; align-items: center; gap: 7px;
-        background: none; border: 1px solid var(--border);
-        border-radius: var(--radius); padding: 8px 16px;
-        font-size: 13px; font-weight: 600; font-family: var(--font);
-        color: var(--txt-2); cursor: pointer;
-        transition: background .15s, border-color .15s, color .15s;
-    }
-
-    .arf-btn-ghost:hover { background: var(--surface); border-color: var(--txt-3); color: var(--txt); }
-
-    .arf-btn-primary {
-        display: flex; align-items: center; gap: 7px;
-        background: var(--accent); border: none;
-        border-radius: var(--radius); padding: 9px 20px;
-        font-size: 13px; font-weight: 700; font-family: var(--font);
-        color: #fff; cursor: pointer;
-        box-shadow: 0 2px 10px var(--accent-glow);
-        transition: background .15s, opacity .15s, box-shadow .15s;
-    }
-
-    .arf-btn-primary:hover:not(:disabled)  { background: var(--accent-hover); }
-    .arf-btn-primary:disabled              { opacity: .45; cursor: not-allowed; box-shadow: none; }
-    .arf-btn-primary.danger                { background: #b91c4e; box-shadow: 0 2px 10px rgba(185,28,78,.35); }
-    .arf-btn-primary.danger:hover:not(:disabled) { background: #9b1742; }
-</style>

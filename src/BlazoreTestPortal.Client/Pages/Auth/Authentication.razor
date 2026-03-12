@@ -1,0 +1,101 @@
+@* Pages/Auth/Authentication.razor *@
+@page "/authentication/{action}"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+<RemoteAuthenticatorView Action="@Action">
+
+    <LoggingIn>
+        <AuthStatusPage Icon="fa-circle-notch fa-spin"
+                        IconColor="#c81766"
+                        Title="Signing you in…"
+                        Message="You are being redirected to Microsoft. Please wait — do not close this tab." />
+    </LoggingIn>
+
+    <CompletingLoggingIn>
+        <AuthStatusPage Icon="fa-circle-notch fa-spin"
+                        IconColor="#c81766"
+                        Title="Completing sign-in…"
+                        Message="Verifying your identity with Azure Active Directory." />
+    </CompletingLoggingIn>
+
+    <LogInFailed Context="errMsg">
+        <AuthStatusPage Icon="fa-circle-exclamation"
+                        IconColor="#e11d48"
+                        Title="Sign-in failed"
+                        Message="@BuildLoginError(errMsg)"
+                        ActionHref="/login"
+                        ActionLabel="Back to sign-in" />
+    </LogInFailed>
+
+    <LogOut>
+        <AuthStatusPage Icon="fa-circle-notch fa-spin"
+                        IconColor="#04595a"
+                        Title="Signing you out…"
+                        Message="Ending your session with Microsoft. Please wait." />
+    </LogOut>
+
+    <CompletingLogOut>
+        <AuthStatusPage Icon="fa-circle-notch fa-spin"
+                        IconColor="#04595a"
+                        Title="Completing sign-out…"
+                        Message="Your session is being cleaned up." />
+    </CompletingLogOut>
+
+    <LogOutSucceeded>
+        <AuthStatusPage Icon="fa-circle-check"
+                        IconColor="#04595a"
+                        Title="You've been signed out"
+                        Message="Your session has ended securely. You can close this tab or sign in again."
+                        ActionHref="/login"
+                        ActionLabel="Sign in again" />
+    </LogOutSucceeded>
+
+    <LogOutFailed Context="errMsg">
+        <AuthStatusPage Icon="fa-circle-exclamation"
+                        IconColor="#e11d48"
+                        Title="Sign-out failed"
+                        Message="@(string.IsNullOrWhiteSpace(errMsg) ? "An error occurred while signing out. Please close your browser to end the session." : errMsg)"
+                        ActionHref="/login"
+                        ActionLabel="Back to sign-in" />
+    </LogOutFailed>
+
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+
+    static string BuildLoginError(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return "An unexpected error occurred during sign-in. Please try again or contact your IT Administrator.";
+
+        var lower = raw.ToLowerInvariant();
+
+        if (lower.Contains("access_denied") || lower.Contains("aadsts65004"))
+            return "Access was denied. Your account may not have permission to use this application. Contact your IT Administrator.";
+
+        if (lower.Contains("invalid_client") || lower.Contains("aadsts700016"))
+            return "The application is not configured correctly (invalid_client). Please notify your IT Administrator.";
+
+        if (lower.Contains("consent_required") || lower.Contains("aadsts65001"))
+            return "Consent is required before you can access this app. Please sign in again and accept the requested permissions.";
+
+        if (lower.Contains("interaction_required") || lower.Contains("aadsts50076") || lower.Contains("mfa"))
+            return "Additional verification (MFA) is required. Please sign in again and complete the multi-factor authentication prompt.";
+
+        if (lower.Contains("temporarily_unavailable") || lower.Contains("server_error") || lower.Contains("aadsts90033"))
+            return "Microsoft's authentication service is temporarily unavailable. Please wait a few minutes and try again.";
+
+        if (lower.Contains("aadsts50055") || lower.Contains("password"))
+            return "Your password has expired. Please reset it via the Microsoft account portal and sign in again.";
+
+        if (lower.Contains("aadsts50057") || lower.Contains("disabled"))
+            return "Your account has been disabled. Please contact your IT Administrator.";
+
+        if (lower.Contains("aadsts50126") || lower.Contains("invalid_grant"))
+            return "Your username or password is incorrect. Please check your credentials and try again.";
+
+        return $"Sign-in failed: {raw}. Please contact your IT Administrator if this problem persists.";
+    }
+}

@@ -1,6 +1,13 @@
 @* Shared/AppTopbar.razor *@
 @inject NavigationManager Nav
+@inject AuthService       AuthSvc
 @implements IDisposable
+
+@* Click outside the user menu to close it *@
+@if (_userMenuOpen)
+{
+    <div class="tb-overlay" @onclick="CloseMenu"></div>
+}
 
 <header class="topbar">
 
@@ -31,33 +38,104 @@
         <button class="tb-btn" @onclick="OnToggleTheme" title="Toggle theme">
             <i class="fa-solid @(IsDark ? "fa-sun" : "fa-moon")"></i>
         </button>
-        <div class="tb-avatar" title="Profile">R</div>
+
+        @* ── User avatar + dropdown ── *@
+        <AuthorizeView>
+            <Authorized Context="auth">
+                <div class="tb-user-wrap">
+                    <button class="tb-avatar"
+                            title="@AuthService.GetEmail(auth.User)"
+                            @onclick="ToggleMenu">
+                        @AuthService.GetInitials(auth.User)
+                    </button>
+
+                    @if (_userMenuOpen)
+                    {
+                        <div class="tb-user-menu">
+
+                            @* User info block *@
+                            <div class="tum-profile">
+                                <div class="tum-avatar">@AuthService.GetInitials(auth.User)</div>
+                                <div class="tum-info">
+                                    <span class="tum-name">
+                                        @AuthService.GetDisplayName(auth.User)
+                                    </span>
+                                    <span class="tum-email">
+                                        @AuthService.GetEmail(auth.User)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="tum-divider"></div>
+
+                            @* Menu items *@
+                            <a href="/profile" class="tum-item" @onclick="CloseMenu">
+                                <i class="fa-solid fa-user"></i>
+                                <span>My Profile</span>
+                            </a>
+                            <a href="/security" class="tum-item" @onclick="CloseMenu">
+                                <i class="fa-solid fa-shield-halved"></i>
+                                <span>Security Settings</span>
+                            </a>
+
+                            <div class="tum-divider"></div>
+
+                            @* Sign out *@
+                            <button class="tum-item tum-signout" @onclick="DoLogout">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                <span>Sign out</span>
+                            </button>
+
+                        </div>
+                    }
+                </div>
+            </Authorized>
+
+            @* Not authenticated — show sign-in button *@
+            <NotAuthorized>
+                <a href="/login" class="tb-signin-btn">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    Sign in
+                </a>
+            </NotAuthorized>
+        </AuthorizeView>
+
     </div>
 
 </header>
 
 @code {
-    [Parameter] public bool          IsDark           { get; set; }
-    [Parameter] public EventCallback OnToggleSidebar  { get; set; }
-    [Parameter] public EventCallback OnOpenMobile     { get; set; }
-    [Parameter] public EventCallback OnToggleTheme    { get; set; }
+    [Parameter] public bool          IsDark          { get; set; }
+    [Parameter] public EventCallback OnToggleSidebar { get; set; }
+    [Parameter] public EventCallback OnOpenMobile    { get; set; }
+    [Parameter] public EventCallback OnToggleTheme   { get; set; }
+    [Parameter] public EventCallback OnLogout        { get; set; }
+
+    bool _userMenuOpen = false;
 
     string CurrentPageName => ResolveName(Nav.ToBaseRelativePath(Nav.Uri));
     string CurrentPageIcon => ResolveIcon(Nav.ToBaseRelativePath(Nav.Uri));
 
     protected override void OnInitialized()
-    {
-        Nav.LocationChanged += OnLocationChanged;
-    }
+        => Nav.LocationChanged += OnLocationChanged;
 
-    void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    void OnLocationChanged(object? _, LocationChangedEventArgs e)
     {
+        _userMenuOpen = false;
         StateHasChanged();
     }
 
     public void Dispose()
+        => Nav.LocationChanged -= OnLocationChanged;
+
+    void ToggleMenu() => _userMenuOpen = !_userMenuOpen;
+    void CloseMenu()  => _userMenuOpen = false;
+
+    async Task DoLogout()
     {
-        Nav.LocationChanged -= OnLocationChanged;
+        _userMenuOpen = false;
+        await OnLogout.InvokeAsync();
+        await AuthSvc.LogoutAsync();
     }
 
     static string ResolveName(string path)
@@ -65,15 +143,15 @@
         path = path.Trim('/').ToLowerInvariant();
         return path switch
         {
-            ""                   => "Home",
-            "insurance"          => "Policies",
-            "billing"            => "Billing",
-            "users"              => "Users",
-            "security"           => "Security",
-            "servers/database"   => "Database",
-            "servers/network"    => "Network",
-            "servers/compute"    => "Compute",
-            _                    => ToTitleCase(path.Split('/')[^1])
+            ""                 => "Home",
+            "insurance"        => "Policies",
+            "billing"          => "Billing",
+            "users"            => "Users",
+            "security"         => "Security",
+            "servers/database" => "Database",
+            "servers/network"  => "Network",
+            "servers/compute"  => "Compute",
+            _                  => Cap(path.Split('/')[^1])
         };
     }
 
@@ -82,59 +160,54 @@
         path = path.Trim('/').ToLowerInvariant();
         return path switch
         {
-            ""                   => "fa-house",
-            "insurance"          => "fa-file-shield",
-            "billing"            => "fa-credit-card",
-            "users"              => "fa-user-group",
-            "security"           => "fa-lock",
-            "servers/database"   => "fa-database",
-            "servers/network"    => "fa-wifi",
-            "servers/compute"    => "fa-memory",
-            _                    => "fa-circle-dot"
+            ""                 => "fa-house",
+            "insurance"        => "fa-file-shield",
+            "billing"          => "fa-credit-card",
+            "users"            => "fa-user-group",
+            "security"         => "fa-lock",
+            "servers/database" => "fa-database",
+            "servers/network"  => "fa-wifi",
+            "servers/compute"  => "fa-memory",
+            _                  => "fa-circle-dot"
         };
     }
 
-    static string ToTitleCase(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return s;
-        return char.ToUpper(s[0]) + s[1..];
-    }
+    static string Cap(string s)
+        => string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
 }
 
 <style>
     .topbar {
         height: var(--topbar-height);
-        display: flex; align-items: center;
-        justify-content: space-between;
+        display: flex; align-items: center; justify-content: space-between;
         padding: 0 20px;
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
+        background: var(--surface); border-bottom: 1px solid var(--border);
         flex-shrink: 0; gap: 12px;
         box-shadow: var(--shadow-sm);
+        position: relative; z-index: 200;
     }
 
     .tb-left, .tb-right { display: flex; align-items: center; gap: 6px; }
 
+    /* breadcrumb */
     .breadcrumb-wrap { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--txt-2); }
     .tb-home-icon    { color: var(--accent); font-size: 12px; }
-    .tb-page-icon    { color: var(--teal); font-size: 12px; }
+    .tb-page-icon    { color: var(--teal);   font-size: 12px; }
     .bc-sep          { color: var(--txt-3); }
     .bc-page         { font-weight: 600; color: var(--txt); }
 
+    /* icon buttons */
     .tb-btn {
-        width: 34px; height: 34px;
+        width: 34px; height: 34px; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
         border-radius: var(--radius);
         background: transparent; border: 1px solid var(--border);
         color: var(--txt-2); cursor: pointer; font-size: 13px;
-        flex-shrink: 0;
         transition: background var(--ease), color var(--ease), border-color var(--ease);
     }
-
     .tb-btn:hover { background: var(--accent-faint); color: var(--accent); border-color: var(--accent); }
 
     .tb-notif { position: relative; }
-
     .notif-pip {
         position: absolute; top: 6px; right: 6px;
         width: 8px; height: 8px; border-radius: 50%;
@@ -143,18 +216,86 @@
 
     .tb-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
 
+    /* ── User avatar ── */
+    .tb-user-wrap { position: relative; }
+
     .tb-avatar {
-        width: 34px; height: 34px; border-radius: 50%;
-        background: var(--accent);
+        width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+        background: var(--accent); color: #fff;
+        font-size: 12px; font-weight: 700;
+        border: 2px solid transparent; cursor: pointer;
         display: flex; align-items: center; justify-content: center;
-        color: #fff; font-weight: 700; font-size: 13px;
-        cursor: pointer; flex-shrink: 0;
-        border: 2px solid transparent;
         transition: border-color var(--ease), box-shadow var(--ease);
     }
-
     .tb-avatar:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint); }
 
+    /* transparent overlay to catch outside-click */
+    .tb-overlay {
+        position: fixed; inset: 0; z-index: 290;
+    }
+
+    /* ── User dropdown menu ── */
+    .tb-user-menu {
+        position: absolute; top: calc(100% + 10px); right: 0;
+        width: 248px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+        z-index: 300; overflow: hidden;
+        animation: tum-pop .15s cubic-bezier(.34,1.3,.64,1) both;
+    }
+    @@keyframes tum-pop {
+        from { opacity: 0; transform: scale(.95) translateY(-4px); }
+        to   { opacity: 1; transform: scale(1)  translateY(0); }
+    }
+
+    /* profile block */
+    .tum-profile {
+        display: flex; align-items: center; gap: 11px;
+        padding: 14px 16px;
+    }
+    .tum-avatar {
+        width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%;
+        background: var(--accent); color: #fff;
+        font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .tum-info  { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .tum-name  { font-size: 13px; font-weight: 700; color: var(--txt);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tum-email { font-size: 11.5px; color: var(--txt-3);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .tum-divider { height: 1px; background: var(--border); }
+
+    /* menu items */
+    .tum-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px;
+        font-size: 13px; color: var(--txt-2);
+        text-decoration: none; cursor: pointer;
+        background: none; border: none; width: 100%; text-align: left;
+        transition: background .12s, color .12s;
+        font-family: var(--font);
+    }
+    .tum-item i      { width: 16px; text-align: center; font-size: 12px; color: var(--txt-3); flex-shrink: 0; }
+    .tum-item:hover  { background: var(--surface-2); color: var(--txt); }
+    .tum-item:hover i{ color: var(--accent); }
+
+    /* sign-out gets a red tint on hover */
+    .tum-signout:hover   { background: rgba(225,29,72,.07); color: #e11d48; }
+    .tum-signout:hover i { color: #e11d48; }
+
+    /* sign-in link (unauthenticated) */
+    .tb-signin-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        background: var(--accent); color: #fff;
+        border-radius: var(--radius); padding: 7px 14px;
+        font-size: 12.5px; font-weight: 700; text-decoration: none;
+        transition: background .15s;
+    }
+    .tb-signin-btn:hover { background: var(--accent-hover); }
+
+    /* responsive */
     .mobile-toggle  { display: none; }
     .desktop-toggle { display: flex; }
 
@@ -165,8 +306,8 @@
         .tb-search { display: none; }
         .mobile-toggle  { display: flex; }
         .desktop-toggle { display: none; }
+        .tb-user-menu   { right: -8px; }
     }
-
     @@media (max-width: 400px) {
         .breadcrumb-wrap { display: none; }
     }

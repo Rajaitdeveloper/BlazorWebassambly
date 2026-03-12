@@ -1,0 +1,26 @@
+@* Shared/RedirectToLogin.razor *@
+@* Rendered inside AuthorizeRouteView <NotAuthorized> — fires only after
+   MSAL has fully resolved auth state and confirmed the user is NOT signed in.
+   Directly initiates the Azure AD redirect — no intermediate /login page hop. *@
+
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Capture the originally-requested URL so MSAL returns here after login
+        var returnUrl = Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery);
+
+        // NavigateToLogin triggers the MSAL redirect flow directly.
+        // This is cleaner than bouncing through /login first.
+        Nav.NavigateToLogin(
+            "authentication/login",
+            new Microsoft.AspNetCore.Components.WebAssembly.Authentication
+                .InteractiveRequestOptions
+            {
+                Interaction = Microsoft.AspNetCore.Components.WebAssembly.Authentication
+                    .InteractionType.SignIn,
+                ReturnUrl = Uri.UnescapeDataString(returnUrl)
+            });
+    }
+}
