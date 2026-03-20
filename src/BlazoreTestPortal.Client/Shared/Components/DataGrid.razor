@@ -1,0 +1,608 @@
+@* Shared/Components/DataGrid.razor *@
+@* Self-contained reusable data grid.
+   Models (GridColumn, CellContext) are defined in the @code block — no external model files needed.
+   
+   USAGE:
+   ──────
+   var columns = new List<GridColumn>
+   {
+       new() { Key = "name",   Label = "Full Name",  Width = "200px", Sortable = true, Filterable = true },
+       new() { Key = "email",  Label = "Email",      Width = "1fr",   Sortable = true, Filterable = true },
+       new() { Key = "role",   Label = "Role",       Width = "120px", Sortable = true },
+       new() { Key = "status", Label = "Status",     Width = "100px", Filterable = true },
+   };
+
+   var rows = new List<Dictionary<string, object?>>
+   {
+       new() { ["name"] = "Raja T", ["email"] = "raja@corp.com", ["role"] = "Admin", ["status"] = "Active" },
+   };
+
+   <DataGrid Columns="columns" Rows="rows" PageSize="10" ShowRowNumbers="true">
+       <CellTemplate Context="cell">
+           @if (cell.Column.Key == "status")
+           {
+               <span class="my-badge">@cell.Value</span>
+           }
+           else { @cell.Value }
+       </CellTemplate>
+   </DataGrid>
+*@
+
+@* ── Toolbar ── *@
+<div class="dg-wrap">
+
+    <div class="dg-toolbar">
+        <div class="dg-search-wrap">
+            <i class="fa-solid fa-magnifying-glass dg-search-icon"></i>
+            <input class="dg-search"
+                   type="search"
+                   placeholder="Search all columns…"
+                   @bind="_globalSearch"
+                   @bind:event="oninput" />
+            @if (!string.IsNullOrEmpty(_globalSearch))
+            {
+                <button class="dg-search-clear" @onclick="@(() => _globalSearch = string.Empty)" title="Clear">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+        <div class="dg-toolbar-right">
+            <span class="dg-count">@_filtered.Count of @Rows.Count row@(Rows.Count != 1 ? "s" : "")</span>
+            @if (_filtered.Count != Rows.Count)
+            {
+                <button class="dg-btn-ghost" @onclick="ClearAll">
+                    <i class="fa-solid fa-filter-circle-xmark"></i> Clear filters
+                </button>
+            }
+        </div>
+    </div>
+
+    @* ── Column filters ── *@
+    @if (Columns.Any(c => c.Filterable))
+    {
+        <div class="dg-filters">
+            @if (ShowRowNumbers) { <div class="dg-filter-cell dg-rn-cell"></div> }
+            @foreach (var col in Columns)
+            {
+                <div class="dg-filter-cell" style="width:@ColWidth(col); min-width:@ColMinWidth(col)">
+                    @if (col.Filterable)
+                    {
+                        <input class="dg-col-filter"
+                               type="search"
+                               placeholder="@col.Label…"
+                               value="@GetColFilter(col.Key)"
+                               @oninput="e => SetColFilter(col.Key, e.Value?.ToString())" />
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Desktop table ── *@
+    <div class="dg-table-wrap">
+        <div class="dg-table" style="grid-template-columns: @GridTemplate">
+
+            @* Header row *@
+            @if (ShowRowNumbers)
+            {
+                <div class="dg-th dg-rn-cell">#</div>
+            }
+            @foreach (var col in Columns)
+            {
+                <div class="dg-th @(col.Sortable ? "dg-th-sort" : "") @(SortKey == col.Key ? "dg-th-active" : "")"
+                     @onclick="() => ToggleSort(col)">
+                    <span class="dg-th-label">@col.Label</span>
+                    @if (col.Sortable)
+                    {
+                        <span class="dg-sort-icon">
+                            @if (SortKey == col.Key)
+                            {
+                                <i class="fa-solid @(SortAsc ? "fa-sort-up" : "fa-sort-down")"></i>
+                            }
+                            else
+                            {
+                                <i class="fa-solid fa-sort dg-sort-idle"></i>
+                            }
+                        </span>
+                    }
+                </div>
+            }
+
+            @* Data rows *@
+            @if (!_paged.Any())
+            {
+                <div class="dg-empty" style="grid-column: 1 / -1">
+                    <i class="fa-solid fa-inbox"></i>
+                    <span>No results found</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var (row, idx) in _paged.Select((r, i) => (r, i)))
+                {
+                    @if (ShowRowNumbers)
+                    {
+                        <div class="dg-td dg-rn-cell @(idx % 2 == 1 ? "dg-row-alt" : "")">
+                            @(_pageIndex * _pageSize + idx + 1)
+                        </div>
+                    }
+                    @foreach (var col in Columns)
+                    {
+                        <div class="dg-td @(idx % 2 == 1 ? "dg-row-alt" : "")" data-label="@col.Label">
+                            @if (CellTemplate is not null)
+                            {
+                                @CellTemplate(new CellContext { Column = col, Row = row, Value = row.GetValueOrDefault(col.Key) })
+                            }
+                            else
+                            {
+                                @row.GetValueOrDefault(col.Key)
+                            }
+                        </div>
+                    }
+                }
+            }
+        </div>
+    </div>
+
+    @* ── Mobile cards ── *@
+    <div class="dg-cards">
+        @if (!_paged.Any())
+        {
+            <div class="dg-empty dg-empty-card">
+                <i class="fa-solid fa-inbox"></i>
+                <span>No results found</span>
+            </div>
+        }
+        else
+        {
+            @foreach (var (row, idx) in _paged.Select((r, i) => (r, i)))
+            {
+                <div class="dg-card">
+                    @if (ShowRowNumbers)
+                    {
+                        <div class="dg-card-num">#@(_pageIndex * _pageSize + idx + 1)</div>
+                    }
+                    @foreach (var col in Columns)
+                    {
+                        <div class="dg-card-row">
+                            <span class="dg-card-label">@col.Label</span>
+                            <span class="dg-card-val">
+                                @if (CellTemplate is not null)
+                                {
+                                    @CellTemplate(new CellContext { Column = col, Row = row, Value = row.GetValueOrDefault(col.Key) })
+                                }
+                                else
+                                {
+                                    @row.GetValueOrDefault(col.Key)
+                                }
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    @* ── Pagination ── *@
+    @if (_totalPages > 1)
+    {
+        <div class="dg-pagination">
+            <span class="dg-page-info">Page @(_pageIndex + 1) of @_totalPages</span>
+            <div class="dg-page-btns">
+                <button class="dg-page-btn" @onclick="FirstPage" disabled="@(_pageIndex == 0)" title="First">
+                    <i class="fa-solid fa-angles-left"></i>
+                </button>
+                <button class="dg-page-btn" @onclick="PrevPage" disabled="@(_pageIndex == 0)" title="Previous">
+                    <i class="fa-solid fa-angle-left"></i>
+                </button>
+                @foreach (var p in PageNumbers)
+                {
+                    <button class="dg-page-btn @(p == _pageIndex ? "dg-page-active" : "")"
+                            @onclick="() => GoToPage(p)">@(p + 1)</button>
+                }
+                <button class="dg-page-btn" @onclick="NextPage" disabled="@(_pageIndex >= _totalPages - 1)" title="Next">
+                    <i class="fa-solid fa-angle-right"></i>
+                </button>
+                <button class="dg-page-btn" @onclick="LastPage" disabled="@(_pageIndex >= _totalPages - 1)" title="Last">
+                    <i class="fa-solid fa-angles-right"></i>
+                </button>
+            </div>
+            <select class="dg-page-size" @bind="_pageSize" @bind:after="ResetPage">
+                <option value="5">5 / page</option>
+                <option value="10">10 / page</option>
+                <option value="25">25 / page</option>
+                <option value="50">50 / page</option>
+            </select>
+        </div>
+    }
+
+</div>
+
+@code {
+
+    // ════════════════════════════════════════════════════════════
+    //  MODELS — defined here so no external file is needed
+    // ════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Defines a single column in the DataGrid.
+    /// Width accepts any CSS grid track value: "1fr", "200px", "minmax(120px,1fr)" etc.
+    /// </summary>
+    public sealed class GridColumn
+    {
+        /// <summary>Key matching the row dictionary entry.</summary>
+        public required string Key { get; init; }
+
+        /// <summary>Header label shown in the grid.</summary>
+        public required string Label { get; init; }
+
+        /// <summary>
+        /// CSS grid column width. Examples:
+        ///   "1fr"              — flexible, fills available space (default)
+        ///   "200px"            — fixed pixel width
+        ///   "20%"              — percentage
+        ///   "minmax(120px,1fr)"— responsive range
+        /// </summary>
+        public string? Width { get; init; } = "1fr";
+
+        /// <summary>Minimum width before horizontal scroll kicks in. Default "80px".</summary>
+        public string? MinWidth { get; init; } = "80px";
+
+        /// <summary>Enable click-to-sort on this column header.</summary>
+        public bool Sortable { get; init; } = false;
+
+        /// <summary>Show a per-column filter input below the header.</summary>
+        public bool Filterable { get; init; } = false;
+    }
+
+    /// <summary>
+    /// Passed to the CellTemplate render fragment.
+    /// Gives access to the column definition, full row, and the cell value.
+    /// </summary>
+    public sealed class CellContext
+    {
+        public required GridColumn               Column { get; init; }
+        public required Dictionary<string, object?> Row { get; init; }
+        public object?                            Value { get; init; }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  PARAMETERS
+    // ════════════════════════════════════════════════════════════
+
+    /// <summary>Column definitions.</summary>
+    [Parameter, EditorRequired]
+    public List<GridColumn> Columns { get; set; } = [];
+
+    /// <summary>Row data — each row is a Dictionary keyed by GridColumn.Key.</summary>
+    [Parameter, EditorRequired]
+    public List<Dictionary<string, object?>> Rows { get; set; } = [];
+
+    /// <summary>Rows per page. Default 10.</summary>
+    [Parameter] public int PageSize { get; set; } = 10;
+
+    /// <summary>Show a leading row-number column.</summary>
+    [Parameter] public bool ShowRowNumbers { get; set; } = false;
+
+    /// <summary>
+    /// Optional custom cell renderer.
+    /// Receives a CellContext with Column, Row, and Value.
+    /// Omit to render the value as plain text.
+    /// </summary>
+    [Parameter] public RenderFragment<CellContext>? CellTemplate { get; set; }
+
+    // ════════════════════════════════════════════════════════════
+    //  INTERNAL STATE
+    // ════════════════════════════════════════════════════════════
+
+    string  _globalSearch = string.Empty;
+    string? SortKey;
+    bool    SortAsc    = true;
+    int     _pageIndex = 0;
+    int     _pageSize  = 10;
+
+    readonly Dictionary<string, string> _colFilters = new();
+
+    List<Dictionary<string, object?>> _filtered = [];
+    List<Dictionary<string, object?>> _paged    = [];
+    int _totalPages = 1;
+
+    protected override void OnParametersSet()
+    {
+        _pageSize = PageSize;
+        Recompute();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  PIPELINE: filter → sort → paginate
+    // ════════════════════════════════════════════════════════════
+
+    void Recompute()
+    {
+        // 1. Filter
+        _filtered = Rows.Where(row =>
+        {
+            if (!string.IsNullOrWhiteSpace(_globalSearch))
+            {
+                var q     = _globalSearch.Trim();
+                var match = Columns.Any(col =>
+                    row.GetValueOrDefault(col.Key)?.ToString()
+                       ?.Contains(q, StringComparison.OrdinalIgnoreCase) == true);
+                if (!match) return false;
+            }
+            foreach (var (key, filter) in _colFilters)
+            {
+                if (string.IsNullOrWhiteSpace(filter)) continue;
+                var val = row.GetValueOrDefault(key)?.ToString() ?? string.Empty;
+                if (!val.Contains(filter, StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            return true;
+        }).ToList();
+
+        // 2. Sort
+        if (SortKey is not null)
+        {
+            _filtered = SortAsc
+                ? _filtered.OrderBy(r => r.GetValueOrDefault(SortKey)?.ToString(), StringComparer.OrdinalIgnoreCase).ToList()
+                : _filtered.OrderByDescending(r => r.GetValueOrDefault(SortKey)?.ToString(), StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        // 3. Paginate
+        _totalPages = Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+        if (_pageIndex >= _totalPages) _pageIndex = 0;
+        _paged = _filtered.Skip(_pageIndex * _pageSize).Take(_pageSize).ToList();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SORT
+    // ════════════════════════════════════════════════════════════
+
+    void ToggleSort(GridColumn col)
+    {
+        if (!col.Sortable) return;
+        if (SortKey == col.Key) SortAsc = !SortAsc;
+        else { SortKey = col.Key; SortAsc = true; }
+        _pageIndex = 0;
+        Recompute();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  FILTERS
+    // ════════════════════════════════════════════════════════════
+
+    string GetColFilter(string key) =>
+        _colFilters.TryGetValue(key, out var v) ? v : string.Empty;
+
+    void SetColFilter(string key, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) _colFilters.Remove(key);
+        else _colFilters[key] = value;
+        _pageIndex = 0;
+        Recompute();
+    }
+
+    void ClearAll()
+    {
+        _globalSearch = string.Empty;
+        _colFilters.Clear();
+        SortKey    = null;
+        SortAsc    = true;
+        _pageIndex = 0;
+        Recompute();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  PAGINATION
+    // ════════════════════════════════════════════════════════════
+
+    void FirstPage()     { _pageIndex = 0;               Recompute(); }
+    void PrevPage()      { _pageIndex--;                  Recompute(); }
+    void NextPage()      { _pageIndex++;                  Recompute(); }
+    void LastPage()      { _pageIndex = _totalPages - 1;  Recompute(); }
+    void GoToPage(int p) { _pageIndex = p;                Recompute(); }
+    void ResetPage()     { _pageIndex = 0;                Recompute(); }
+
+    IEnumerable<int> PageNumbers
+    {
+        get
+        {
+            var start = Math.Max(0, _pageIndex - 2);
+            var end   = Math.Min(_totalPages - 1, start + 4);
+            start     = Math.Max(0, end - 4);
+            return Enumerable.Range(start, end - start + 1);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  CSS HELPERS
+    // ════════════════════════════════════════════════════════════
+
+    string ColWidth(GridColumn col)    => col.Width    ?? "1fr";
+    string ColMinWidth(GridColumn col) => col.MinWidth ?? "80px";
+
+    string GridTemplate
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (ShowRowNumbers) parts.Add("48px");
+            parts.AddRange(Columns.Select(c => c.Width ?? "1fr"));
+            return string.Join(" ", parts);
+        }
+    }
+}
+
+<style>
+    /* ══════════════════════════════════════
+       DataGrid — all styles scoped here
+    ══════════════════════════════════════ */
+
+    .dg-wrap {
+        display: flex; flex-direction: column;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius-lg, 14px);
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+        font-size: 13px;
+    }
+
+    /* ── Toolbar ── */
+    .dg-toolbar {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+    }
+    .dg-search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 340px; }
+    .dg-search-icon {
+        position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+        color: var(--txt-3, #94a3b8); font-size: 12px; pointer-events: none;
+    }
+    .dg-search {
+        width: 100%; padding: 7px 32px 7px 32px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px);
+        background: var(--surface, #fff);
+        font-size: 13px; color: var(--txt, #1e293b);
+        font-family: var(--font, inherit); outline: none;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .dg-search:focus {
+        border-color: var(--accent, #c81766);
+        box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
+    }
+    .dg-search-clear {
+        position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer; padding: 2px 4px;
+        color: var(--txt-3, #94a3b8); font-size: 11px; border-radius: 4px;
+        transition: color .12s;
+    }
+    .dg-search-clear:hover { color: var(--txt, #1e293b); }
+    .dg-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .dg-count { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
+    .dg-btn-ghost {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: none; border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px); padding: 5px 12px;
+        font-size: 12px; font-weight: 600; color: var(--txt-2, #475569);
+        cursor: pointer; font-family: var(--font, inherit);
+        transition: background .12s, border-color .12s, color .12s;
+    }
+    .dg-btn-ghost:hover { background: var(--surface, #fff); border-color: var(--accent, #c81766); color: var(--accent, #c81766); }
+
+    /* ── Column filters ── */
+    .dg-filters {
+        display: flex; align-items: center;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+        overflow-x: auto; scrollbar-width: none;
+    }
+    .dg-filters::-webkit-scrollbar { display: none; }
+    .dg-filter-cell { padding: 6px 8px; flex-shrink: 0; }
+    .dg-col-filter {
+        width: 100%; padding: 5px 8px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 6px; font-size: 12px;
+        background: var(--surface, #fff); color: var(--txt, #1e293b);
+        font-family: var(--font, inherit); outline: none;
+        transition: border-color .15s;
+    }
+    .dg-col-filter:focus { border-color: var(--accent, #c81766); }
+
+    /* ── Table ── */
+    .dg-table-wrap { overflow-x: auto; scrollbar-width: thin; }
+    .dg-table { display: grid; min-width: 100%; }
+
+    .dg-th {
+        display: flex; align-items: center; gap: 6px;
+        padding: 10px 12px;
+        background: var(--surface-2, #f7f9fc);
+        border-bottom: 2px solid var(--border, #e2e8f0);
+        font-size: 11px; font-weight: 700; letter-spacing: .4px;
+        text-transform: uppercase; color: var(--txt-2, #475569);
+        white-space: nowrap; user-select: none;
+        position: sticky; top: 0; z-index: 2;
+    }
+    .dg-th-sort  { cursor: pointer; transition: color .12s, background .12s; }
+    .dg-th-sort:hover { color: var(--accent, #c81766); background: rgba(200,23,102,.05); }
+    .dg-th-active { color: var(--accent, #c81766); }
+    .dg-th-label { flex: 1; }
+    .dg-sort-icon { font-size: 11px; color: var(--accent, #c81766); }
+    .dg-sort-idle { color: var(--txt-3, #94a3b8); }
+
+    .dg-rn-cell { width: 48px; min-width: 48px; max-width: 48px; color: var(--txt-3, #94a3b8); justify-content: center; font-size: 11px; }
+
+    .dg-td {
+        display: flex; align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        color: var(--txt, #1e293b); word-break: break-word;
+        transition: background .1s;
+    }
+    .dg-row-alt { background: var(--surface-2, #f7f9fc); }
+    .dg-table:has(.dg-td:hover) .dg-td { background: rgba(200,23,102,.03); }
+    .dg-table .dg-td:hover { background: rgba(200,23,102,.07) !important; }
+
+    .dg-empty {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        padding: 48px 20px; color: var(--txt-3, #94a3b8); font-size: 14px;
+    }
+    .dg-empty i { font-size: 22px; }
+
+    /* ── Mobile cards ── */
+    .dg-cards { display: none; }
+    .dg-card {
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+        transition: background .1s;
+    }
+    .dg-card:last-child { border-bottom: none; }
+    .dg-card:hover { background: var(--surface-2, #f7f9fc); }
+    .dg-card-num { font-size: 10px; font-weight: 700; color: var(--txt-3, #94a3b8); letter-spacing: .5px; }
+    .dg-card-row { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; }
+    .dg-card-label { font-size: 11px; font-weight: 700; color: var(--txt-3, #94a3b8); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; flex-shrink: 0; min-width: 100px; }
+    .dg-card-val { font-size: 13px; color: var(--txt, #1e293b); text-align: right; word-break: break-word; }
+    .dg-empty-card { border: none; }
+
+    /* ── Pagination ── */
+    .dg-pagination {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+    }
+    .dg-page-info { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
+    .dg-page-btns { display: flex; align-items: center; gap: 4px; margin: 0 auto; }
+    .dg-page-btn {
+        min-width: 32px; height: 32px; padding: 0 8px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px);
+        background: var(--surface, #fff); color: var(--txt-2, #475569);
+        font-size: 12px; font-weight: 600; cursor: pointer;
+        font-family: var(--font, inherit);
+        display: flex; align-items: center; justify-content: center;
+        transition: background .12s, border-color .12s, color .12s;
+    }
+    .dg-page-btn:hover:not(:disabled) { border-color: var(--accent, #c81766); color: var(--accent, #c81766); background: rgba(200,23,102,.06); }
+    .dg-page-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .dg-page-active { background: var(--accent, #c81766) !important; color: #fff !important; border-color: var(--accent, #c81766) !important; }
+    .dg-page-size {
+        padding: 5px 8px; border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px); font-size: 12px;
+        background: var(--surface, #fff); color: var(--txt-2, #475569);
+        font-family: var(--font, inherit); cursor: pointer; outline: none;
+    }
+
+    /* ── Responsive — switch to cards below 640px ── */
+    @@media (max-width: 640px) {
+        .dg-table-wrap { display: none; }
+        .dg-filters     { display: none; }
+        .dg-cards       { display: block; }
+        .dg-toolbar     { padding: 10px 12px; }
+        .dg-search-wrap { max-width: 100%; }
+        .dg-pagination  { justify-content: center; }
+        .dg-page-info   { width: 100%; text-align: center; }
+    }
+</style>
