@@ -1,16 +1,25 @@
 @* Pages/Demo/GridDemo.razor *@
+@* Demonstrates DataGrid in server-side mode.
+   OnQuery fires for every search, filter, sort, page, and page-size change.
+   Replace the simulated API delay with a real Http call.
+*@
 @page "/grid-demo"
 @attribute [AllowAnonymous]
 
+@inject HttpClient Http
+
 <PageTitle>Grid Demo - Tindo Blazor</PageTitle>
 
-<div style="padding: 28px 32px; display:flex; flex-direction:column; gap:24px;">
+<div style="display:flex; flex-direction:column; gap:24px;">
 
     <div>
-        <h2 style="font-size:20px; font-weight:700; color:var(--txt); margin:0 0 4px">DataGrid Demo</h2>
-        <p style="font-size:13px; color:var(--txt-3); margin:0">Dynamic columns, sort, filter, pagination, hidden columns, row actions.</p>
+        <h2 style="font-size:20px; font-weight:700; color:var(--txt); margin:0 0 4px">DataGrid — Server-Side Demo</h2>
+        <p style="font-size:13px; color:var(--txt-3); margin:0">
+            All search, filter, sort, pagination fire <strong>OnQuery</strong> — replace the simulated call with your API.
+        </p>
     </div>
 
+    @* ── Toast ── *@
     @if (!string.IsNullOrEmpty(_toast))
     {
         <div style="padding:12px 16px; background:var(--surface); border:1px solid var(--border);
@@ -24,16 +33,47 @@
         </div>
     }
 
+    @* ── Last query fired — shows what the API would receive ── *@
+    @if (_lastQuery is not null)
+    {
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
+                    padding:12px 16px; font-size:12px; color:var(--txt-2); display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <span style="font-weight:700; color:var(--txt);">Last query sent to API:</span>
+            <span>Search: <code>@((string.IsNullOrWhiteSpace(_lastQuery.SearchTerm) ? "—" : _lastQuery.SearchTerm))</code></span>
+            @foreach (var f in _lastQuery.Filters)
+            {
+                <span>@f.Key: <code>@f.Value</code></span>
+            }
+            <span>Sort: <code>@(_lastQuery.SortKey ?? "—") @(_lastQuery.SortKey != null ? (_lastQuery.SortAscending ? "↑" : "↓") : "")</code></span>
+            <span>Page: <code>@(_lastQuery.Page + 1)</code></span>
+            <span>PageSize: <code>@_lastQuery.PageSize</code></span>
+            @if (_loading)
+            {
+                <span style="margin-left:auto; display:flex; align-items:center; gap:6px; color:var(--accent);">
+                    <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--accent-faint);
+                                 border-top-color:var(--accent);animation:dg-spin .7s linear infinite;display:inline-block;"></span>
+                    Loading…
+                </span>
+            }
+        </div>
+    }
+
+    @* ── DataGrid in server-side mode ── *@
     <DataGrid Columns="_columns"
               Rows="_rows"
               PageSize="5"
               ShowRowNumbers="true"
+              ServerSide="true"
+              TotalCount="@_totalCount"
+              EnableSearchButton="true"
+              EnableFilterButton="true"
+              OnQuery="HandleQuery"
               OnView="HandleView"
               OnEdit="HandleEdit">
         <CellTemplate Context="cell">
             @if (cell.Column.Key == "status")
             {
-                <span style="display:inline-flex;align-items:center;gap:5px;
+                <span style="display:inline-flex; align-items:center; gap:5px;
                              padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700;
                              background:@(cell.Value?.ToString() == "Active" ? "rgba(4,89,90,.12)" : "rgba(200,23,102,.1)");
                              color:@(cell.Value?.ToString() == "Active" ? "var(--teal)" : "var(--accent)")">
@@ -42,10 +82,9 @@
             }
             else if (cell.Column.Key == "role")
             {
-                <span style="display:inline-flex;align-items:center;gap:5px;
+                <span style="display:inline-flex; align-items:center; gap:5px;
                              padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600;
-                             background:var(--surface-2); color:var(--txt-2);
-                             border:1px solid var(--border)">
+                             background:var(--surface-2); color:var(--txt-2); border:1px solid var(--border)">
                     @cell.Value
                 </span>
             }
@@ -58,49 +97,198 @@
 
 </div>
 
+<style>
+    @@keyframes dg-spin { to { transform: rotate(360deg); } }
+    code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+</style>
+
 @code {
+
+    // ── Column definitions ────────────────────────────────────────────────────
+
     readonly List<DataGrid.GridColumn> _columns =
     [
-        new() { Key = "id",         Label = "ID",           Hidden = true                                         },
-        new() { Key = "name",       Label = "Full Name",    Width = "180px", Sortable = true,  Filterable = true  },
-        new() { Key = "email",      Label = "Email",        Width = "1fr",   Sortable = true,  Filterable = true  },
-        new() { Key = "department", Label = "Department",   Width = "150px", Sortable = true,  Filterable = true  },
-        new() { Key = "role",       Label = "Role",         Width = "120px", Sortable = true,  Filterable = false },
-        new() { Key = "status",     Label = "Status",       Width = "100px", Sortable = true,  Filterable = false },
-        new() { Key = "joined",     Label = "Joined",       Width = "110px", Sortable = true,  Filterable = false },
+        new() { Key = "id",         Label = "ID",           Hidden = true                                        },
+        new() { Key = "name",       Label = "Full Name",    Width = "180px", Sortable = true, Filterable = true  },
+        new() { Key = "email",      Label = "Email",        Width = "1fr",   Sortable = true, Filterable = true  },
+        new() { Key = "department", Label = "Department",   Width = "150px", Sortable = true, Filterable = true  },
+        new() { Key = "role",       Label = "Role",         Width = "120px", Sortable = true, Filterable = true  },
+        new() { Key = "status",     Label = "Status",       Width = "100px", Sortable = true, Filterable = true  },
+        new() { Key = "joined",     Label = "Joined",       Width = "110px", Sortable = true                     },
     ];
 
-    string _toast = string.Empty;
+    // ── State ─────────────────────────────────────────────────────────────────
 
-    void HandleView(DataGrid.RowActionContext ctx)
+    List<Dictionary<string, object?>> _rows       = [];
+    int                               _totalCount = 0;
+    string                            _toast      = string.Empty;
+    bool                              _loading    = false;
+    DataGrid.GridQuery?               _lastQuery  = null;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load initial page on startup
+        await LoadData(new DataGrid.GridQuery { Page = 0, PageSize = 5 });
+    }
+
+    // ── OnQuery — fires for ALL grid interactions ─────────────────────────────
+    // sort, search, column filter, page change, page size change
+
+    async Task HandleQuery(DataGrid.GridQuery query)
+    {
+        await LoadData(query);
+    }
+
+    // ── Core data loader — replace body with real API call ────────────────────
+
+    async Task LoadData(DataGrid.GridQuery query)
+    {
+        _loading   = true;
+        _lastQuery = query;
+        StateHasChanged();
+
+        try
+        {
+            // ══════════════════════════════════════════════════════════════════
+            // REPLACE THIS BLOCK WITH YOUR REAL API CALL
+            // ──────────────────────────────────────────────────────────────────
+            // Example with a real API endpoint:
+            //
+            //   var url = BuildApiUrl(query);
+            //   var result = await Http.GetFromJsonAsync<PagedResult<UserDto>>(url);
+            //   _rows       = result!.Items.Select(MapToRow).ToList();
+            //   _totalCount = result!.TotalCount;
+            //
+            // Where PagedResult<T> is:
+            //   public class PagedResult<T> {
+            //       public List<T> Items      { get; set; }
+            //       public int     TotalCount { get; set; }
+            //   }
+            //
+            // And BuildApiUrl maps GridQuery to your API query string:
+            //   string BuildApiUrl(DataGrid.GridQuery q)
+            //   {
+            //       var sb = new StringBuilder("api/users?");
+            //       if (!string.IsNullOrWhiteSpace(q.SearchTerm))
+            //           sb.Append($"search={Uri.EscapeDataString(q.SearchTerm)}&");
+            //       foreach (var f in q.Filters)
+            //           sb.Append($"{f.Key}={Uri.EscapeDataString(f.Value)}&");
+            //       if (q.SortKey != null)
+            //           sb.Append($"sortBy={q.SortKey}&sortDir={( q.SortAscending ? "asc" : "desc")}&");
+            //       sb.Append($"page={q.Page}&pageSize={q.PageSize}");
+            //       return sb.ToString();
+            //   }
+            // ══════════════════════════════════════════════════════════════════
+
+            // ── SIMULATED SERVER-SIDE LOGIC (remove in production) ────────────
+            await Task.Delay(400); // simulate network latency
+
+            // Use IEnumerable (not IQueryable) so lambdas are compiled delegates
+            // and null-propagating operators (?.) are allowed.
+            IEnumerable<Dictionary<string, object?>> source = _seedData;
+
+            // Apply global search
+            if (!string.IsNullOrWhiteSpace(query.SearchTerm))
+            {
+                var q = query.SearchTerm.Trim();
+                source = source.Where(r => r.Values.Any(v =>
+                    v != null && v.ToString() != null &&
+                    v.ToString()!.Contains(q, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            // Apply column filters
+            foreach (var (key, value) in query.Filters)
+            {
+                if (string.IsNullOrWhiteSpace(value)) continue;
+                var filterKey = key;
+                var filterVal = value;
+                source = source.Where(r =>
+                {
+                    var cell = r.GetValueOrDefault(filterKey);
+                    return cell != null &&
+                           cell.ToString() != null &&
+                           cell.ToString()!.Contains(filterVal, StringComparison.OrdinalIgnoreCase);
+                });
+            }
+
+            // Apply sort
+            if (!string.IsNullOrWhiteSpace(query.SortKey))
+            {
+                var sortKey = query.SortKey;
+                source = query.SortAscending
+                    ? source.OrderBy(r =>
+                    {
+                        var v = r.GetValueOrDefault(sortKey);
+                        return v != null ? v.ToString() : string.Empty;
+                    }, StringComparer.OrdinalIgnoreCase)
+                    : source.OrderByDescending(r =>
+                    {
+                        var v = r.GetValueOrDefault(sortKey);
+                        return v != null ? v.ToString() : string.Empty;
+                    }, StringComparer.OrdinalIgnoreCase);
+            }
+
+            // Get total count BEFORE paging
+            var allMatched = source.ToList();
+            _totalCount    = allMatched.Count;
+
+            // Apply paging
+            _rows = allMatched
+                .Skip(query.Page * query.PageSize)
+                .Take(query.PageSize)
+                .ToList();
+            // ── END SIMULATED LOGIC ───────────────────────────────────────────
+        }
+        catch (Exception ex)
+        {
+            _toast = $"❌ Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Row action handlers ───────────────────────────────────────────────────
+
+    Task HandleView(DataGrid.RowActionContext ctx)
     {
         var id   = ctx.Get<string>("id");
         var name = ctx.Get<string>("name");
-        _toast = $"👁 Viewing {name} (ID: {id})";
-        StateHasChanged();
+        _toast   = $"👁 Viewing {name} (ID: {id})";
+        // In production: Nav.NavigateTo($"/users/{id}") or open a modal
+        return Task.CompletedTask;
     }
 
-    void HandleEdit(DataGrid.RowActionContext ctx)
+    Task HandleEdit(DataGrid.RowActionContext ctx)
     {
         var id   = ctx.Get<string>("id");
         var name = ctx.Get<string>("name");
-        _toast = $"✏️ Editing {name} (ID: {id})";
-        StateHasChanged();
+        _toast   = $"✏️ Editing {name} (ID: {id})";
+        // In production: Nav.NavigateTo($"/users/edit/{id}") or open an edit modal
+        return Task.CompletedTask;
     }
 
-    readonly List<Dictionary<string, object?>> _rows =
+    // ── Seed data (replace with API in production) ────────────────────────────
+
+    static readonly List<Dictionary<string, object?>> _seedData =
     [
-        new() { ["id"]="USR-001", ["name"]="Raja Thangarasu",   ["email"]="raja@corp.com",    ["department"]="Engineering",  ["role"]="Admin",    ["status"]="Active",   ["joined"]="2021-03-15" },
-        new() { ["id"]="USR-002", ["name"]="Jane Doe",          ["email"]="jane@corp.com",    ["department"]="Design",       ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-07-01" },
-        new() { ["id"]="USR-003", ["name"]="John Smith",        ["email"]="john@corp.com",    ["department"]="Engineering",  ["role"]="Developer",["status"]="Inactive", ["joined"]="2020-11-20" },
-        new() { ["id"]="USR-004", ["name"]="Alice Johnson",     ["email"]="alice@corp.com",   ["department"]="HR",           ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-01-10" },
-        new() { ["id"]="USR-005", ["name"]="Bob Williams",      ["email"]="bob@corp.com",     ["department"]="Finance",      ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-05-05" },
-        new() { ["id"]="USR-006", ["name"]="Carol Martinez",    ["email"]="carol@corp.com",   ["department"]="Design",       ["role"]="Editor",   ["status"]="Inactive", ["joined"]="2022-09-14" },
-        new() { ["id"]="USR-007", ["name"]="David Lee",         ["email"]="david@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-08-30" },
-        new() { ["id"]="USR-008", ["name"]="Eve Wilson",        ["email"]="eve@corp.com",     ["department"]="Marketing",    ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-03-22" },
-        new() { ["id"]="USR-009", ["name"]="Frank Brown",       ["email"]="frank@corp.com",   ["department"]="Finance",      ["role"]="Viewer",   ["status"]="Inactive", ["joined"]="2020-06-18" },
-        new() { ["id"]="USR-010", ["name"]="Grace Taylor",      ["email"]="grace@corp.com",   ["department"]="HR",           ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-12-01" },
-        new() { ["id"]="USR-011", ["name"]="Henry Anderson",    ["email"]="henry@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-02-14" },
-        new() { ["id"]="USR-012", ["name"]="Isabella Thomas",   ["email"]="isabella@corp.com",["department"]="Marketing",    ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-10-09" },
+        new() { ["id"]="USR-001", ["name"]="Raja Thangarasu",  ["email"]="raja@corp.com",     ["department"]="Engineering", ["role"]="Admin",     ["status"]="Active",   ["joined"]="2021-03-15" },
+        new() { ["id"]="USR-002", ["name"]="Jane Doe",         ["email"]="jane@corp.com",     ["department"]="Design",      ["role"]="Editor",    ["status"]="Active",   ["joined"]="2022-07-01" },
+        new() { ["id"]="USR-003", ["name"]="John Smith",       ["email"]="john@corp.com",     ["department"]="Engineering", ["role"]="Developer", ["status"]="Inactive", ["joined"]="2020-11-20" },
+        new() { ["id"]="USR-004", ["name"]="Alice Johnson",    ["email"]="alice@corp.com",    ["department"]="HR",          ["role"]="Viewer",    ["status"]="Active",   ["joined"]="2023-01-10" },
+        new() { ["id"]="USR-005", ["name"]="Bob Williams",     ["email"]="bob@corp.com",      ["department"]="Finance",     ["role"]="Admin",     ["status"]="Active",   ["joined"]="2019-05-05" },
+        new() { ["id"]="USR-006", ["name"]="Carol Martinez",   ["email"]="carol@corp.com",    ["department"]="Design",      ["role"]="Editor",    ["status"]="Inactive", ["joined"]="2022-09-14" },
+        new() { ["id"]="USR-007", ["name"]="David Lee",        ["email"]="david@corp.com",    ["department"]="Engineering", ["role"]="Developer", ["status"]="Active",   ["joined"]="2021-08-30" },
+        new() { ["id"]="USR-008", ["name"]="Eve Wilson",       ["email"]="eve@corp.com",      ["department"]="Marketing",   ["role"]="Viewer",    ["status"]="Active",   ["joined"]="2023-03-22" },
+        new() { ["id"]="USR-009", ["name"]="Frank Brown",      ["email"]="frank@corp.com",    ["department"]="Finance",     ["role"]="Viewer",    ["status"]="Inactive", ["joined"]="2020-06-18" },
+        new() { ["id"]="USR-010", ["name"]="Grace Taylor",     ["email"]="grace@corp.com",    ["department"]="HR",          ["role"]="Editor",    ["status"]="Active",   ["joined"]="2022-12-01" },
+        new() { ["id"]="USR-011", ["name"]="Henry Anderson",   ["email"]="henry@corp.com",    ["department"]="Engineering", ["role"]="Developer", ["status"]="Active",   ["joined"]="2021-02-14" },
+        new() { ["id"]="USR-012", ["name"]="Isabella Thomas",  ["email"]="isabella@corp.com", ["department"]="Marketing",   ["role"]="Admin",     ["status"]="Active",   ["joined"]="2019-10-09" },
     ];
 }
+
+

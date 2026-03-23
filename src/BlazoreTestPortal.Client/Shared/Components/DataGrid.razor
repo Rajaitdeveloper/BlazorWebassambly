@@ -1,32 +1,37 @@
 @* Shared/Components/DataGrid.razor *@
-@* Self-contained reusable data grid.
-   Models (GridColumn, CellContext) are defined in the @code block — no external model files needed.
-   
-   USAGE:
-   ──────
-   var columns = new List<GridColumn>
-   {
-       new() { Key = "name",   Label = "Full Name",  Width = "200px", Sortable = true, Filterable = true },
-       new() { Key = "email",  Label = "Email",      Width = "1fr",   Sortable = true, Filterable = true },
-       new() { Key = "role",   Label = "Role",       Width = "120px", Sortable = true },
-       new() { Key = "status", Label = "Status",     Width = "100px", Filterable = true },
-   };
+@* Self-contained reusable data grid — supports both client-side and server-side modes.
+   Models (GridColumn, CellContext, RowActionContext, GridQuery, GridSortInfo) are
+   defined in the @code block — no external model files needed.
 
-   var rows = new List<Dictionary<string, object?>>
-   {
-       new() { ["name"] = "Raja T", ["email"] = "raja@corp.com", ["role"] = "Admin", ["status"] = "Active" },
-   };
+   ── CLIENT-SIDE MODE (default) ───────────────────────────────────────────────
+   Pass all rows up front. Grid handles filtering, sorting, paging internally.
 
-   <DataGrid Columns="columns" Rows="rows" PageSize="10" ShowRowNumbers="true">
-       <CellTemplate Context="cell">
-           @if (cell.Column.Key == "status")
-           {
-               <span class="my-badge">@cell.Value</span>
-           }
-           else { @cell.Value }
-       </CellTemplate>
-   </DataGrid>
+   <DataGrid Columns="_cols" Rows="_rows" />
+
+   ── SERVER-SIDE MODE ─────────────────────────────────────────────────────────
+   Set ServerSide=true and TotalCount to the total record count from your API.
+   Handle OnQuery to call your API whenever the user changes search/filter/sort/page.
+
+   <DataGrid Columns="_cols" Rows="_rows"
+             ServerSide="true"
+             TotalCount="@_total"
+             OnQuery="HandleQuery" />
+
+   The OnQuery callback receives a GridQuery with:
+     - SearchTerm       → global search box value
+     - Filters          → Dictionary<string,string> of column key → filter value
+     - SortKey          → column key being sorted (null = no sort)
+     - SortAscending    → true = asc, false = desc
+     - Page             → 0-based page index
+     - PageSize         → rows per page
+
+   ── CONFIGURABLE FLAGS ───────────────────────────────────────────────────────
+   EnableSearchButton  → global search fires on button/Enter (not keystroke)
+   EnableFilterButton  → column filters fire on button/Enter (not keystroke)
+   Both default false. Set true when using server-side to avoid per-keystroke API calls.
 *@
+
+@using Microsoft.AspNetCore.Components.Web
 
 @* ── Toolbar ── *@
 <div class="dg-wrap">
@@ -35,7 +40,7 @@
         <div class="dg-search-wrap">
             <i class="fa-solid fa-magnifying-glass dg-search-icon"></i>
             <input class="dg-search @(EnableSearchButton ? "dg-search-has-btn" : "")"
-                   type="search"
+                   type="text"
                    placeholder="Search all columns…"
                    @bind="_searchInput"
                    @bind:event="@(EnableSearchButton ? "onchange" : "oninput")"
@@ -56,10 +61,16 @@
             }
         </div>
         <div class="dg-toolbar-right">
-            <span class="dg-count">@_filtered.Count of @Rows.Count row@(Rows.Count != 1 ? "s" : "")</span>
-            @if (_filtered.Count != Rows.Count || !string.IsNullOrEmpty(_searchInput))
+            <span class="dg-count">
+                @(_displayTotal) row@(_displayTotal != 1 ? "s" : "")
+                @if (!ServerSide && _filtered.Count != Rows.Count)
+                {
+                    <span> of @Rows.Count</span>
+                }
+            </span>
+            @if (HasActiveFilters)
             {
-                <button class="dg-btn-ghost" @onclick="ClearAll">
+                <button class="dg-btn-ghost" @onclick="async () => await ClearAll()">
                     <i class="fa-solid fa-filter-circle-xmark"></i> Clear filters
                 </button>
             }
@@ -67,7 +78,7 @@
     </div>
 
     @* ── Column filters ── *@
-    @if (Columns.Any(c => c.Filterable))
+    @if (VisibleColumns.Any(c => c.Filterable))
     {
         <div class="dg-filters">
             @if (ShowRowNumbers) { <div class="dg-filter-cell dg-rn-cell"></div> }
@@ -76,13 +87,36 @@
                 <div class="dg-filter-cell" style="width:@ColWidth(col); min-width:@ColMinWidth(col)">
                     @if (col.Filterable)
                     {
-                        <input class="dg-col-filter"
-                               type="search"
-                               placeholder="@col.Label…"
-                               value="@GetColFilter(col.Key)"
-                               @oninput="e => SetColFilter(col.Key, e.Value?.ToString())" />
+                        <div class="dg-col-filter-wrap">
+                            <input class="dg-col-filter @(EnableFilterButton ? "dg-col-filter-has-btn" : "")"
+                                   type="text"
+                                   placeholder="@col.Label…"
+                                   value="@GetColFilterInput(col.Key)"
+                                   @oninput="e => OnColFilterInput(col.Key, e.Value?.ToString())"
+                                   @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                            @if (!string.IsNullOrEmpty(GetColFilterInput(col.Key)))
+                            {
+                                <button class="dg-col-filter-clear"
+                                        @onclick="() => ClearColFilter(col.Key)"
+                                        title="Clear">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            }
+                            @if (EnableFilterButton)
+                            {
+                                <button class="dg-col-filter-btn"
+                                        @onclick="() => ApplyColFilter(col.Key)"
+                                        title="Filter">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
+            }
+            @if (HasRowActions)
+            {
+                <div class="dg-filter-cell" style="width:auto; min-width:100px"></div>
             }
         </div>
     }
@@ -266,7 +300,7 @@
                     <i class="fa-solid fa-angles-right"></i>
                 </button>
             </div>
-            <select class="dg-page-size" @bind="_pageSize" @bind:after="ResetPage">
+            <select class="dg-page-size" @bind="_pageSize" @bind:after="OnPageSizeChanged">
                 <option value="5">5 / page</option>
                 <option value="10">10 / page</option>
                 <option value="25">25 / page</option>
@@ -280,221 +314,363 @@
 @code {
 
     // ════════════════════════════════════════════════════════════
-    //  MODELS — defined here so no external file is needed
+    //  MODELS
     // ════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Defines a single column in the DataGrid.
-    /// Width accepts any CSS grid track value: "1fr", "200px", "minmax(120px,1fr)" etc.
-    /// </summary>
     public sealed class GridColumn
     {
-        /// <summary>Key matching the row dictionary entry.</summary>
-        public required string Key { get; init; }
-
-        /// <summary>Header label shown in the grid.</summary>
-        public required string Label { get; init; }
-
-        /// <summary>
-        /// CSS grid column width. Examples:
-        ///   "1fr"              — flexible, fills available space (default)
-        ///   "200px"            — fixed pixel width
-        ///   "20%"              — percentage
-        ///   "minmax(120px,1fr)"— responsive range
-        /// </summary>
-        public string? Width { get; init; } = "1fr";
-
-        /// <summary>Minimum width before horizontal scroll kicks in. Default "80px".</summary>
-        public string? MinWidth { get; init; } = "80px";
-
-        /// <summary>Enable click-to-sort on this column header.</summary>
-        public bool Sortable { get; init; } = false;
-
-        /// <summary>Show a per-column filter input below the header.</summary>
-        public bool Filterable { get; init; } = false;
-
-        /// <summary>
-        /// Hide this column from the rendered table and mobile cards.
-        /// The value is still present in the row dictionary — use it
-        /// to pass hidden IDs to OnView / OnEdit callbacks.
-        /// Example: new GridColumn { Key = "id", Label = "ID", Hidden = true }
-        /// </summary>
-        public bool Hidden { get; init; } = false;
+        public required string Key        { get; init; }
+        public required string Label      { get; init; }
+        public string?         Width      { get; init; } = "1fr";
+        public string?         MinWidth   { get; init; } = "80px";
+        public bool            Sortable   { get; init; } = false;
+        public bool            Filterable { get; init; } = false;
+        public bool            Hidden     { get; init; } = false;
     }
 
-    /// <summary>
-    /// Passed to the CellTemplate render fragment.
-    /// Gives access to the column definition, full row, and the cell value.
-    /// </summary>
     public sealed class CellContext
     {
         public required GridColumn               Column { get; init; }
         public required Dictionary<string, object?> Row { get; init; }
-        public object?                            Value { get; init; }
+        public          object?                  Value  { get; init; }
+    }
+
+    public sealed class RowActionContext
+    {
+        public required Dictionary<string, object?> Row { get; init; }
+        public object? Get(string key)    => Row.GetValueOrDefault(key);
+        public T?      Get<T>(string key) => Row.TryGetValue(key, out var v) && v is T t ? t : default;
     }
 
     /// <summary>
-    /// Context passed to OnView and OnEdit callbacks.
-    /// Contains the full row dictionary so hidden ID columns are accessible.
+    /// Passed to OnQuery. Contains everything needed to build an API request.
     /// </summary>
-    public sealed class RowActionContext
+    public sealed class GridQuery
     {
-        /// <summary>The full row data including hidden columns.</summary>
-        public required Dictionary<string, object?> Row { get; init; }
+        /// <summary>Global search box value. Empty string = no global search.</summary>
+        public string SearchTerm { get; init; } = string.Empty;
 
-        /// <summary>Shortcut to read a value by column key.</summary>
-        public object? Get(string key) => Row.GetValueOrDefault(key);
+        /// <summary>
+        /// Per-column filter values keyed by GridColumn.Key.
+        /// Only contains columns that have a non-empty filter value.
+        /// Example: { "name": "raja", "status": "active" }
+        /// </summary>
+        public Dictionary<string, string> Filters { get; init; } = [];
 
-        /// <summary>Shortcut to read a typed value by column key.</summary>
-        public T? Get<T>(string key) =>
-            Row.TryGetValue(key, out var v) && v is T typed ? typed : default;
+        /// <summary>Column key being sorted. Null = no sort applied.</summary>
+        public string? SortKey { get; init; }
+
+        /// <summary>True = ascending, false = descending.</summary>
+        public bool SortAscending { get; init; } = true;
+
+        /// <summary>0-based page index.</summary>
+        public int Page { get; init; } = 0;
+
+        /// <summary>Number of rows per page.</summary>
+        public int PageSize { get; init; } = 10;
     }
 
     // ════════════════════════════════════════════════════════════
     //  PARAMETERS
     // ════════════════════════════════════════════════════════════
 
-    /// <summary>Column definitions.</summary>
-    [Parameter, EditorRequired]
-    public List<GridColumn> Columns { get; set; } = [];
-
-    /// <summary>Row data — each row is a Dictionary keyed by GridColumn.Key.</summary>
-    [Parameter, EditorRequired]
-    public List<Dictionary<string, object?>> Rows { get; set; } = [];
-
-    /// <summary>Rows per page. Default 10.</summary>
-    [Parameter] public int PageSize { get; set; } = 10;
-
-    /// <summary>Show a leading row-number column.</summary>
-    [Parameter] public bool ShowRowNumbers { get; set; } = false;
+    [Parameter, EditorRequired] public List<GridColumn>                     Columns   { get; set; } = [];
+    [Parameter, EditorRequired] public List<Dictionary<string, object?>>    Rows      { get; set; } = [];
+    [Parameter] public int                           PageSize             { get; set; } = 10;
+    [Parameter] public bool                          ShowRowNumbers        { get; set; } = false;
+    [Parameter] public RenderFragment<CellContext>?  CellTemplate          { get; set; }
+    [Parameter] public bool                          ShowScrollbar         { get; set; } = false;
+    [Parameter] public string                        ScrollHeight          { get; set; } = "400px";
 
     /// <summary>
-    /// Optional custom cell renderer.
-    /// Receives a CellContext with Column, Row, and Value.
-    /// Omit to render the value as plain text.
+    /// Global search fires on button click or Enter when true.
+    /// Fires on every keystroke when false (default, client-side).
     /// </summary>
-    [Parameter] public RenderFragment<CellContext>? CellTemplate { get; set; }
+    [Parameter] public bool                          EnableSearchButton    { get; set; } = false;
 
     /// <summary>
-    /// Show a vertical scrollbar inside the table body.
-    /// When true, the table body is constrained to ScrollHeight and scrolls vertically.
-    /// Default false — table grows with content.
+    /// Column filters fire on button click or Enter when true.
+    /// Fire instantly on keystroke when false (default, client-side).
     /// </summary>
-    [Parameter] public bool ShowScrollbar { get; set; } = false;
+    [Parameter] public bool                          EnableFilterButton    { get; set; } = false;
 
     /// <summary>
-    /// Maximum height of the scrollable table body when ShowScrollbar is true.
-    /// Accepts any CSS height value: "400px", "60vh", "300px" etc.
-    /// Default "400px".
+    /// When true, the grid does NOT filter/sort/paginate the Rows list internally.
+    /// All logic is delegated to OnQuery. You must update Rows and TotalCount from the callback.
     /// </summary>
-    [Parameter] public string ScrollHeight { get; set; } = "400px";
+    [Parameter] public bool                          ServerSide            { get; set; } = false;
 
     /// <summary>
-    /// When true, search only fires when the Search button is clicked or Enter is pressed.
-    /// Use this when rows are loaded from an API to avoid a request on every keystroke.
-    /// When false (default), search filters instantly on each keystroke.
+    /// Total record count from the server — used for pagination when ServerSide=true.
+    /// Ignored in client-side mode.
     /// </summary>
-    [Parameter] public bool EnableSearchButton { get; set; } = false;
+    [Parameter] public int                           TotalCount            { get; set; } = 0;
 
     /// <summary>
-    /// Callback fired when a search is triggered (button click or Enter).
-    /// Only raised when EnableSearchButton is true.
-    /// Receives the current search term — use it to call your API.
+    /// Fires whenever the user changes search, column filters, sort, page, or page size.
+    /// Only fires when ServerSide=true, EnableSearchButton=true, or EnableFilterButton=true.
+    /// Receives a GridQuery — use it to build your API request.
     /// </summary>
-    [Parameter] public EventCallback<string> OnSearch { get; set; }
+    [Parameter] public EventCallback<GridQuery>      OnQuery               { get; set; }
 
-    /// <summary>
-    /// When set, a View button appears in the Actions column for each row.
-    /// Receives a RowActionContext — access hidden ID columns via context.Get("id").
-    /// </summary>
-    [Parameter] public EventCallback<RowActionContext> OnView { get; set; }
+    // Legacy single-purpose callbacks — still work, but OnQuery covers all cases
+    [Parameter] public EventCallback<string>         OnSearch              { get; set; }
 
-    /// <summary>
-    /// When set, an Edit button appears in the Actions column for each row.
-    /// Receives a RowActionContext — access hidden ID columns via context.Get("id").
-    /// </summary>
-    [Parameter] public EventCallback<RowActionContext> OnEdit { get; set; }
+    [Parameter] public EventCallback<RowActionContext> OnView              { get; set; }
+    [Parameter] public EventCallback<RowActionContext> OnEdit              { get; set; }
+    [Parameter] public string                        RowActionsLabel       { get; set; } = "Actions";
 
-    /// <summary>
-    /// Header label for the Actions column. Default "Actions".
-    /// </summary>
-    [Parameter] public string RowActionsLabel { get; set; } = "Actions";
-
-    /// <summary>Convenience: true when at least one row action is configured.</summary>
-    bool HasRowActions => OnView.HasDelegate || OnEdit.HasDelegate;
-
-    /// <summary>Visible columns only (Hidden = false).</summary>
-    IEnumerable<GridColumn> VisibleColumns => Columns.Where(c => !c.Hidden);
+    bool HasRowActions   => OnView.HasDelegate || OnEdit.HasDelegate;
+    List<GridColumn> VisibleColumns { get; set; } = [];
 
     // ════════════════════════════════════════════════════════════
     //  INTERNAL STATE
     // ════════════════════════════════════════════════════════════
 
-    string  _globalSearch = string.Empty;  // committed search term used in filter pipeline
-    string  _searchInput  = string.Empty;  // live value bound to the input (pending when button mode)
+    string  _searchInput  = string.Empty;
+    string  _globalSearch = string.Empty;
     string? SortKey;
-    bool    SortAsc    = true;
-    int     _pageIndex = 0;
-    int     _pageSize  = 10;
+    bool    SortAsc       = true;
+    int     _pageIndex    = 0;
+    int     _pageSize     = 10;
 
-    readonly Dictionary<string, string> _colFilters = new();
+    // col key → pending input value (before button press)
+    readonly Dictionary<string, string> _colFilterInputs  = new();
+    // col key → committed filter value (used in pipeline)
+    readonly Dictionary<string, string> _colFilters       = new();
 
     List<Dictionary<string, object?>> _filtered = [];
     List<Dictionary<string, object?>> _paged    = [];
-    int _totalPages = 1;
+    int _totalPages  = 1;
+    int _displayTotal => ServerSide ? TotalCount : _filtered.Count;
+
+    bool HasActiveFilters =>
+        !string.IsNullOrEmpty(_searchInput) ||
+        _colFilters.Any(f => !string.IsNullOrEmpty(f.Value)) ||
+        _colFilterInputs.Any(f => !string.IsNullOrEmpty(f.Value));
+
+    // ════════════════════════════════════════════════════════════
+    //  LIFECYCLE
+    // ════════════════════════════════════════════════════════════
 
     protected override void OnParametersSet()
     {
-        _pageSize = PageSize;
-        Recompute();
+        _pageSize      = PageSize;
+        VisibleColumns = Columns.Where(col => !col.Hidden).ToList();
+
+        if (ServerSide)
+            UpdateServerSidePaging();
+        else
+            Recompute();
     }
 
-    // ── Search button helpers ─────────────────────────────────────────────────
+    // In server-side mode, Rows is already the current page from the API
+    void UpdateServerSidePaging()
+    {
+        _totalPages = Math.Max(1, (int)Math.Ceiling(TotalCount / (double)_pageSize));
+        _paged      = Rows;
+    }
 
-    /// <summary>Commit the search input and fire OnSearch callback (API mode).</summary>
+    // ════════════════════════════════════════════════════════════
+    //  QUERY BUILDER — builds GridQuery from current state
+    // ════════════════════════════════════════════════════════════
+
+    GridQuery BuildQuery() => new()
+    {
+        SearchTerm    = _globalSearch,
+        Filters       = new Dictionary<string, string>(_colFilters),
+        SortKey       = SortKey,
+        SortAscending = SortAsc,
+        Page          = _pageIndex,
+        PageSize      = _pageSize,
+    };
+
+    async Task FireQuery()
+    {
+        if (OnQuery.HasDelegate)
+            await OnQuery.InvokeAsync(BuildQuery());
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  GLOBAL SEARCH
+    // ════════════════════════════════════════════════════════════
+
     async Task ApplySearch()
     {
         _globalSearch = _searchInput;
         _pageIndex    = 0;
-        Recompute();
-        if (OnSearch.HasDelegate)
-            await OnSearch.InvokeAsync(_globalSearch);
+        if (ServerSide || OnQuery.HasDelegate)
+        {
+            await FireQuery();
+        }
+        else
+        {
+            Recompute();
+            if (OnSearch.HasDelegate)
+                await OnSearch.InvokeAsync(_globalSearch);
+        }
     }
 
-    /// <summary>Allow pressing Enter in the search box to trigger search.</summary>
     async Task OnSearchKeyDown(KeyboardEventArgs e)
     {
         if (!EnableSearchButton) return;
         if (e.Key == "Enter") await ApplySearch();
     }
 
-    /// <summary>Clear both the input and the committed search term.</summary>
     async Task ClearSearch()
     {
         _searchInput  = string.Empty;
         _globalSearch = string.Empty;
         _pageIndex    = 0;
-        Recompute();
-        if (EnableSearchButton && OnSearch.HasDelegate)
-            await OnSearch.InvokeAsync(string.Empty);
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+        {
+            Recompute();
+            if (OnSearch.HasDelegate)
+                await OnSearch.InvokeAsync(string.Empty);
+        }
     }
 
     // ════════════════════════════════════════════════════════════
-    //  PIPELINE: filter → sort → paginate
+    //  COLUMN FILTERS
+    // ════════════════════════════════════════════════════════════
+
+    string GetColFilterInput(string key) =>
+        _colFilterInputs.TryGetValue(key, out var v) ? v : string.Empty;
+
+    void OnColFilterInput(string key, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) _colFilterInputs.Remove(key);
+        else _colFilterInputs[key] = value;
+
+        // Instant mode — commit immediately
+        if (!EnableFilterButton)
+        {
+            CommitColFilter(key, value);
+            _pageIndex = 0;
+            Recompute();
+        }
+    }
+
+    async Task OnColFilterKeyDown(KeyboardEventArgs e, string key)
+    {
+        if (!EnableFilterButton) return;
+        if (e.Key == "Enter") await ApplyColFilter(key);
+    }
+
+    async Task ApplyColFilter(string key)
+    {
+        var value = GetColFilterInput(key);
+        CommitColFilter(key, value);
+        _pageIndex = 0;
+
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+            Recompute();
+    }
+
+    async Task ClearColFilter(string key)
+    {
+        _colFilterInputs.Remove(key);
+        _colFilters.Remove(key);
+        _pageIndex = 0;
+
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+            Recompute();
+    }
+
+    void CommitColFilter(string key, string? value)
+    {
+        if (string.IsNullOrEmpty(value)) _colFilters.Remove(key);
+        else _colFilters[key] = value;
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  SORT
+    // ════════════════════════════════════════════════════════════
+
+    async Task ToggleSort(GridColumn col)
+    {
+        if (!col.Sortable) return;
+        if (SortKey == col.Key) SortAsc = !SortAsc;
+        else { SortKey = col.Key; SortAsc = true; }
+        _pageIndex = 0;
+
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+            Recompute();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  PAGINATION
+    // ════════════════════════════════════════════════════════════
+
+    async Task FirstPage() { _pageIndex = 0;              await PageChanged(); }
+    async Task PrevPage()  { _pageIndex--;                 await PageChanged(); }
+    async Task NextPage()  { _pageIndex++;                 await PageChanged(); }
+    async Task LastPage()  { _pageIndex = _totalPages - 1; await PageChanged(); }
+    async Task GoToPage(int p) { _pageIndex = p;           await PageChanged(); }
+
+    async Task OnPageSizeChanged()
+    {
+        _pageIndex = 0;
+        await PageChanged();
+    }
+
+    async Task PageChanged()
+    {
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+            Recompute();
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  CLEAR ALL
+    // ════════════════════════════════════════════════════════════
+
+    async Task ClearAll()
+    {
+        _searchInput = string.Empty;
+        _globalSearch = string.Empty;
+        _colFilterInputs.Clear();
+        _colFilters.Clear();
+        SortKey    = null;
+        SortAsc    = true;
+        _pageIndex = 0;
+
+        if (ServerSide || OnQuery.HasDelegate)
+            await FireQuery();
+        else
+        {
+            Recompute();
+            if (OnSearch.HasDelegate)
+                await OnSearch.InvokeAsync(string.Empty);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  CLIENT-SIDE PIPELINE: filter → sort → paginate
     // ════════════════════════════════════════════════════════════
 
     void Recompute()
     {
-        // 1. Filter
+        if (ServerSide) { UpdateServerSidePaging(); return; }
+
         _filtered = Rows.Where(row =>
         {
             if (!string.IsNullOrWhiteSpace(_globalSearch))
             {
-                var q     = _globalSearch.Trim();
-                var match = Columns.Any(col =>
+                var q = _globalSearch.Trim();
+                if (!VisibleColumns.Any(col =>
                     row.GetValueOrDefault(col.Key)?.ToString()
-                       ?.Contains(q, StringComparison.OrdinalIgnoreCase) == true);
-                if (!match) return false;
+                       ?.Contains(q, StringComparison.OrdinalIgnoreCase) == true))
+                    return false;
             }
             foreach (var (key, filter) in _colFilters)
             {
@@ -505,7 +681,6 @@
             return true;
         }).ToList();
 
-        // 2. Sort
         if (SortKey is not null)
         {
             _filtered = SortAsc
@@ -513,61 +688,17 @@
                 : _filtered.OrderByDescending(r => r.GetValueOrDefault(SortKey)?.ToString(), StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        // 3. Paginate
         _totalPages = Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
         if (_pageIndex >= _totalPages) _pageIndex = 0;
         _paged = _filtered.Skip(_pageIndex * _pageSize).Take(_pageSize).ToList();
     }
 
     // ════════════════════════════════════════════════════════════
-    //  SORT
+    //  CSS HELPERS
     // ════════════════════════════════════════════════════════════
 
-    void ToggleSort(GridColumn col)
-    {
-        if (!col.Sortable) return;
-        if (SortKey == col.Key) SortAsc = !SortAsc;
-        else { SortKey = col.Key; SortAsc = true; }
-        _pageIndex = 0;
-        Recompute();
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  FILTERS
-    // ════════════════════════════════════════════════════════════
-
-    string GetColFilter(string key) =>
-        _colFilters.TryGetValue(key, out var v) ? v : string.Empty;
-
-    void SetColFilter(string key, string? value)
-    {
-        if (string.IsNullOrEmpty(value)) _colFilters.Remove(key);
-        else _colFilters[key] = value;
-        _pageIndex = 0;
-        Recompute();
-    }
-
-    void ClearAll()
-    {
-        _searchInput  = string.Empty;
-        _globalSearch = string.Empty;
-        _colFilters.Clear();
-        SortKey    = null;
-        SortAsc    = true;
-        _pageIndex = 0;
-        Recompute();
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  PAGINATION
-    // ════════════════════════════════════════════════════════════
-
-    void FirstPage()     { _pageIndex = 0;               Recompute(); }
-    void PrevPage()      { _pageIndex--;                  Recompute(); }
-    void NextPage()      { _pageIndex++;                  Recompute(); }
-    void LastPage()      { _pageIndex = _totalPages - 1;  Recompute(); }
-    void GoToPage(int p) { _pageIndex = p;                Recompute(); }
-    void ResetPage()     { _pageIndex = 0;                Recompute(); }
+    string ColWidth(GridColumn col)    => col.Width    ?? "1fr";
+    string ColMinWidth(GridColumn col) => col.MinWidth ?? "80px";
 
     IEnumerable<int> PageNumbers
     {
@@ -579,13 +710,6 @@
             return Enumerable.Range(start, end - start + 1);
         }
     }
-
-    // ════════════════════════════════════════════════════════════
-    //  CSS HELPERS
-    // ════════════════════════════════════════════════════════════
-
-    string ColWidth(GridColumn col)    => col.Width    ?? "1fr";
-    string ColMinWidth(GridColumn col) => col.MinWidth ?? "80px";
 
     string GridTemplate
     {
@@ -601,10 +725,6 @@
 }
 
 <style>
-    /* ══════════════════════════════════════
-       DataGrid — all styles scoped here
-    ══════════════════════════════════════ */
-
     .dg-wrap {
         display: flex; flex-direction: column;
         background: var(--surface, #fff);
@@ -637,6 +757,9 @@
         font-family: var(--font, inherit); outline: none;
         transition: border-color .15s, box-shadow .15s;
     }
+    .dg-search::-webkit-search-cancel-button,
+    .dg-search::-webkit-search-decoration,
+    .dg-search::-ms-clear { display: none; appearance: none; }
     .dg-search:focus {
         border-color: var(--accent, #c81766);
         box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
@@ -648,11 +771,8 @@
         transition: color .12s;
     }
     .dg-search-clear:hover { color: var(--txt, #1e293b); }
-
-    /* Search button mode — extra right padding for button */
-    .dg-search-has-btn { padding-right: 96px; }
-    .dg-search-clear-with-btn { right: 76px; }
-
+    .dg-search-has-btn { padding-right: 120px; }
+    .dg-search-clear-with-btn { right: 98px; }
     .dg-search-btn {
         position: absolute; right: 0; top: 0; bottom: 0;
         display: inline-flex; align-items: center; gap: 6px;
@@ -665,6 +785,7 @@
     }
     .dg-search-btn:hover { background: var(--accent-hover, #a81257); }
     .dg-search-btn i { font-size: 11px; }
+
     .dg-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .dg-count { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
     .dg-btn-ghost {
@@ -686,40 +807,58 @@
     }
     .dg-filters::-webkit-scrollbar { display: none; }
     .dg-filter-cell { padding: 6px 8px; flex-shrink: 0; }
+
+    .dg-col-filter-wrap { position: relative; display: flex; align-items: center; }
     .dg-col-filter {
-        width: 100%; padding: 5px 8px;
+        width: 100%; padding: 5px 24px 5px 8px;
         border: 1px solid var(--border, #e2e8f0);
         border-radius: 6px; font-size: 12px;
         background: var(--surface, #fff); color: var(--txt, #1e293b);
         font-family: var(--font, inherit); outline: none;
         transition: border-color .15s;
     }
+    .dg-col-filter::-webkit-search-cancel-button,
+    .dg-col-filter::-ms-clear { display: none; }
     .dg-col-filter:focus { border-color: var(--accent, #c81766); }
+    .dg-col-filter-has-btn { padding-right: 52px; }
+
+    .dg-col-filter-clear {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer;
+        color: var(--txt-3, #94a3b8); font-size: 10px; padding: 2px 3px;
+        border-radius: 3px; transition: color .12s; line-height: 1;
+    }
+    .dg-col-filter-has-btn .dg-col-filter-clear,
+    .dg-col-filter-wrap:has(.dg-col-filter-has-btn) .dg-col-filter-clear { right: 30px; }
+    .dg-col-filter-clear:hover { color: var(--accent, #c81766); }
+
+    .dg-col-filter-btn {
+        position: absolute; right: 0; top: 0; bottom: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px;
+        background: var(--accent, #c81766); color: #fff;
+        border: none; border-radius: 0 6px 6px 0;
+        font-size: 11px; cursor: pointer;
+        transition: background .15s;
+    }
+    .dg-col-filter-btn:hover { background: var(--accent-hover, #a81257); }
 
     /* ── Table ── */
     .dg-table-wrap { overflow-x: auto; scrollbar-width: thin; }
-
-    /* ── Scrollable mode (ShowScrollbar=true) ── */
     .dg-scrollable {
-        overflow-y: auto;
-        scrollbar-width: thin;
+        overflow-y: auto; scrollbar-width: thin;
         scrollbar-color: var(--accent, #c81766) var(--surface-2, #f7f9fc);
     }
-
-    /* Webkit scrollbar styling */
     .dg-scrollable::-webkit-scrollbar        { width: 7px; height: 7px; }
     .dg-scrollable::-webkit-scrollbar-track  { background: var(--surface-2, #f7f9fc); border-radius: 4px; }
     .dg-scrollable::-webkit-scrollbar-thumb  { background: var(--accent, #c81766); border-radius: 4px; }
     .dg-scrollable::-webkit-scrollbar-thumb:hover { background: var(--accent-hover, #a81257); }
     .dg-scrollable::-webkit-scrollbar-corner { background: var(--surface-2, #f7f9fc); }
-
-    /* Keep header sticky inside scroll container */
     .dg-scrollable .dg-th { position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 var(--border, #e2e8f0); }
-    .dg-table { display: grid; min-width: 100%; }
 
+    .dg-table { display: grid; min-width: 100%; }
     .dg-th {
-        display: flex; align-items: center; gap: 6px;
-        padding: 10px 12px;
+        display: flex; align-items: center; gap: 6px; padding: 10px 12px;
         background: var(--surface-2, #f7f9fc);
         border-bottom: 2px solid var(--border, #e2e8f0);
         font-size: 11px; font-weight: 700; letter-spacing: .4px;
@@ -733,21 +872,15 @@
     .dg-th-label { flex: 1; }
     .dg-sort-icon { font-size: 11px; color: var(--accent, #c81766); }
     .dg-sort-idle { color: var(--txt-3, #94a3b8); }
-
     .dg-rn-cell { width: 48px; min-width: 48px; max-width: 48px; color: var(--txt-3, #94a3b8); justify-content: center; font-size: 11px; }
-
     .dg-td {
-        display: flex; align-items: center;
-        padding: 10px 12px;
+        display: flex; align-items: center; padding: 10px 12px;
         border-bottom: 1px solid var(--border, #e2e8f0);
-        color: var(--txt, #1e293b); word-break: break-word;
-        transition: background .1s;
+        color: var(--txt, #1e293b); word-break: break-word; transition: background .1s;
     }
     .dg-row-alt { background: var(--surface-2, #f7f9fc); }
 
-    /* Hover only the cells in the same row — uses CSS subgrid row tracking via data-row */
-    /* Row hover — only cells sharing the same data-row value are highlighted.
-       :has() checks if ANY cell in this row is hovered, then applies to ALL cells in that row. */
+    /* Row hover — scoped to data-row index */
     .dg-table:has([data-row="0"]:hover) [data-row="0"],
     .dg-table:has([data-row="1"]:hover) [data-row="1"],
     .dg-table:has([data-row="2"]:hover) [data-row="2"],
@@ -797,23 +930,14 @@
     .dg-table:has([data-row="46"]:hover) [data-row="46"],
     .dg-table:has([data-row="47"]:hover) [data-row="47"],
     .dg-table:has([data-row="48"]:hover) [data-row="48"],
-    .dg-table:has([data-row="49"]:hover) [data-row="49"] {
-        background: rgba(200,23,102,.07);
-    }
+    .dg-table:has([data-row="49"]:hover) [data-row="49"] { background: rgba(200,23,102,.07); }
 
-    .dg-empty {
-        display: flex; align-items: center; justify-content: center; gap: 10px;
-        padding: 48px 20px; color: var(--txt-3, #94a3b8); font-size: 14px;
-    }
+    .dg-empty { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 20px; color: var(--txt-3, #94a3b8); font-size: 14px; }
     .dg-empty i { font-size: 22px; }
 
     /* ── Mobile cards ── */
     .dg-cards { display: none; }
-    .dg-card {
-        border-bottom: 1px solid var(--border, #e2e8f0);
-        padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
-        transition: background .1s;
-    }
+    .dg-card { border-bottom: 1px solid var(--border, #e2e8f0); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; transition: background .1s; }
     .dg-card:last-child { border-bottom: none; }
     .dg-card:hover { background: var(--surface-2, #f7f9fc); }
     .dg-card-num { font-size: 10px; font-weight: 700; color: var(--txt-3, #94a3b8); letter-spacing: .5px; }
@@ -821,37 +945,29 @@
     .dg-card-label { font-size: 11px; font-weight: 700; color: var(--txt-3, #94a3b8); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; flex-shrink: 0; min-width: 100px; }
     .dg-card-val { font-size: 13px; color: var(--txt, #1e293b); text-align: right; word-break: break-word; }
     .dg-empty-card { border: none; }
+    .dg-card-actions { display: flex; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border, #e2e8f0); margin-top: 4px; }
 
     /* ── Pagination ── */
-    .dg-pagination {
-        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-        padding: 12px 16px;
-        border-top: 1px solid var(--border, #e2e8f0);
-        background: var(--surface-2, #f7f9fc);
-    }
+    .dg-pagination { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--border, #e2e8f0); background: var(--surface-2, #f7f9fc); }
     .dg-page-info { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
     .dg-page-btns { display: flex; align-items: center; gap: 4px; margin: 0 auto; }
-    .dg-page-btn {
-        min-width: 32px; height: 32px; padding: 0 8px;
-        border: 1px solid var(--border, #e2e8f0);
-        border-radius: var(--radius, 8px);
-        background: var(--surface, #fff); color: var(--txt-2, #475569);
-        font-size: 12px; font-weight: 600; cursor: pointer;
-        font-family: var(--font, inherit);
-        display: flex; align-items: center; justify-content: center;
-        transition: background .12s, border-color .12s, color .12s;
-    }
+    .dg-page-btn { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--border, #e2e8f0); border-radius: var(--radius, 8px); background: var(--surface, #fff); color: var(--txt-2, #475569); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font, inherit); display: flex; align-items: center; justify-content: center; transition: background .12s, border-color .12s, color .12s; }
     .dg-page-btn:hover:not(:disabled) { border-color: var(--accent, #c81766); color: var(--accent, #c81766); background: rgba(200,23,102,.06); }
     .dg-page-btn:disabled { opacity: .4; cursor: not-allowed; }
     .dg-page-active { background: var(--accent, #c81766) !important; color: #fff !important; border-color: var(--accent, #c81766) !important; }
-    .dg-page-size {
-        padding: 5px 8px; border: 1px solid var(--border, #e2e8f0);
-        border-radius: var(--radius, 8px); font-size: 12px;
-        background: var(--surface, #fff); color: var(--txt-2, #475569);
-        font-family: var(--font, inherit); cursor: pointer; outline: none;
-    }
+    .dg-page-size { padding: 5px 8px; border: 1px solid var(--border, #e2e8f0); border-radius: var(--radius, 8px); font-size: 12px; background: var(--surface, #fff); color: var(--txt-2, #475569); font-family: var(--font, inherit); cursor: pointer; outline: none; }
 
-    /* ── Responsive — switch to cards below 640px ── */
+    /* ── Actions column ── */
+    .dg-th-actions { justify-content: center; min-width: 100px; }
+    .dg-td-actions { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .dg-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; border: 1px solid transparent; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font, inherit); white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
+    .dg-action-btn i { font-size: 11px; }
+    .dg-action-view { background: var(--teal-faint, rgba(4,89,90,.12)); border-color: rgba(4,89,90,.2); color: var(--teal, #04595a); }
+    .dg-action-view:hover { background: var(--teal, #04595a); border-color: var(--teal, #04595a); color: #fff; }
+    .dg-action-edit { background: var(--accent-faint, rgba(200,23,102,.1)); border-color: rgba(200,23,102,.2); color: var(--accent, #c81766); }
+    .dg-action-edit:hover { background: var(--accent, #c81766); border-color: var(--accent, #c81766); color: #fff; }
+
+    /* ── Responsive ── */
     @@media (max-width: 640px) {
         .dg-table-wrap { display: none; }
         .dg-filters     { display: none; }
@@ -860,55 +976,6 @@
         .dg-search-wrap { max-width: 100%; }
         .dg-pagination  { justify-content: center; }
         .dg-page-info   { width: 100%; text-align: center; }
-    }
-    /* ── Actions column ── */
-    .dg-th-actions {
-        justify-content: center;
-        min-width: 100px;
-    }
-    .dg-td-actions {
-        display: flex; align-items: center; justify-content: center;
-        gap: 6px; flex-wrap: wrap;
-    }
-    .dg-action-btn {
-        display: inline-flex; align-items: center; gap: 5px;
-        padding: 4px 10px; border-radius: 6px; border: 1px solid transparent;
-        font-size: 12px; font-weight: 600; cursor: pointer;
-        font-family: var(--font, inherit); white-space: nowrap;
-        transition: background .12s, border-color .12s, color .12s;
-    }
-    .dg-action-btn i { font-size: 11px; }
-
-    .dg-action-view {
-        background: var(--teal-faint, rgba(4,89,90,.12));
-        border-color: rgba(4,89,90,.2);
-        color: var(--teal, #04595a);
-    }
-    .dg-action-view:hover {
-        background: var(--teal, #04595a);
-        border-color: var(--teal, #04595a);
-        color: #fff;
-    }
-
-    .dg-action-edit {
-        background: var(--accent-faint, rgba(200,23,102,.1));
-        border-color: rgba(200,23,102,.2);
-        color: var(--accent, #c81766);
-    }
-    .dg-action-edit:hover {
-        background: var(--accent, #c81766);
-        border-color: var(--accent, #c81766);
-        color: #fff;
-    }
-
-    /* Mobile card actions */
-    .dg-card-actions {
-        display: flex; gap: 8px; padding-top: 6px;
-        border-top: 1px solid var(--border, #e2e8f0);
-        margin-top: 4px;
-    }
-
-    @@media (max-width: 640px) {
-        .dg-action-btn { flex: 1; justify-content: center; }
+        .dg-action-btn  { flex: 1; justify-content: center; }
     }
 </style>
