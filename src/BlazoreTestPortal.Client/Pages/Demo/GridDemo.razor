@@ -8,13 +8,28 @@
 
     <div>
         <h2 style="font-size:20px; font-weight:700; color:var(--txt); margin:0 0 4px">DataGrid Demo</h2>
-        <p style="font-size:13px; color:var(--txt-3); margin:0">Dynamic columns, sort, filter, pagination, custom cell renderer.</p>
+        <p style="font-size:13px; color:var(--txt-3); margin:0">Dynamic columns, sort, filter, pagination, hidden columns, row actions.</p>
     </div>
+
+    @if (!string.IsNullOrEmpty(_toast))
+    {
+        <div style="padding:12px 16px; background:var(--surface); border:1px solid var(--border);
+                    border-left:4px solid var(--accent); border-radius:var(--radius);
+                    font-size:13px; color:var(--txt); display:flex; align-items:center; gap:10px;">
+            @_toast
+            <button @onclick="@(() => _toast = string.Empty)"
+                    style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--txt-3);font-size:13px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    }
 
     <DataGrid Columns="_columns"
               Rows="_rows"
               PageSize="5"
-              ShowRowNumbers="true">
+              ShowRowNumbers="true"
+              OnView="HandleView"
+              OnEdit="HandleEdit">
         <CellTemplate Context="cell">
             @if (cell.Column.Key == "status")
             {
@@ -46,6 +61,7 @@
 @code {
     readonly List<DataGrid.GridColumn> _columns =
     [
+        new() { Key = "id",         Label = "ID",           Hidden = true                                         },
         new() { Key = "name",       Label = "Full Name",    Width = "180px", Sortable = true,  Filterable = true  },
         new() { Key = "email",      Label = "Email",        Width = "1fr",   Sortable = true,  Filterable = true  },
         new() { Key = "department", Label = "Department",   Width = "150px", Sortable = true,  Filterable = true  },
@@ -54,19 +70,37 @@
         new() { Key = "joined",     Label = "Joined",       Width = "110px", Sortable = true,  Filterable = false },
     ];
 
+    string _toast = string.Empty;
+
+    void HandleView(DataGrid.RowActionContext ctx)
+    {
+        var id   = ctx.Get<string>("id");
+        var name = ctx.Get<string>("name");
+        _toast = $"👁 Viewing {name} (ID: {id})";
+        StateHasChanged();
+    }
+
+    void HandleEdit(DataGrid.RowActionContext ctx)
+    {
+        var id   = ctx.Get<string>("id");
+        var name = ctx.Get<string>("name");
+        _toast = $"✏️ Editing {name} (ID: {id})";
+        StateHasChanged();
+    }
+
     readonly List<Dictionary<string, object?>> _rows =
     [
-        new() { ["name"]="Raja Thangarasu",   ["email"]="raja@corp.com",    ["department"]="Engineering",  ["role"]="Admin",    ["status"]="Active",   ["joined"]="2021-03-15" },
-        new() { ["name"]="Jane Doe",          ["email"]="jane@corp.com",    ["department"]="Design",       ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-07-01" },
-        new() { ["name"]="John Smith",        ["email"]="john@corp.com",    ["department"]="Engineering",  ["role"]="Developer",["status"]="Inactive", ["joined"]="2020-11-20" },
-        new() { ["name"]="Alice Johnson",     ["email"]="alice@corp.com",   ["department"]="HR",           ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-01-10" },
-        new() { ["name"]="Bob Williams",      ["email"]="bob@corp.com",     ["department"]="Finance",      ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-05-05" },
-        new() { ["name"]="Carol Martinez",    ["email"]="carol@corp.com",   ["department"]="Design",       ["role"]="Editor",   ["status"]="Inactive", ["joined"]="2022-09-14" },
-        new() { ["name"]="David Lee",         ["email"]="david@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-08-30" },
-        new() { ["name"]="Eve Wilson",        ["email"]="eve@corp.com",     ["department"]="Marketing",    ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-03-22" },
-        new() { ["name"]="Frank Brown",       ["email"]="frank@corp.com",   ["department"]="Finance",      ["role"]="Viewer",   ["status"]="Inactive", ["joined"]="2020-06-18" },
-        new() { ["name"]="Grace Taylor",      ["email"]="grace@corp.com",   ["department"]="HR",           ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-12-01" },
-        new() { ["name"]="Henry Anderson",    ["email"]="henry@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-02-14" },
-        new() { ["name"]="Isabella Thomas",   ["email"]="isabella@corp.com",["department"]="Marketing",    ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-10-09" },
+        new() { ["id"]="USR-001", ["name"]="Raja Thangarasu",   ["email"]="raja@corp.com",    ["department"]="Engineering",  ["role"]="Admin",    ["status"]="Active",   ["joined"]="2021-03-15" },
+        new() { ["id"]="USR-002", ["name"]="Jane Doe",          ["email"]="jane@corp.com",    ["department"]="Design",       ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-07-01" },
+        new() { ["id"]="USR-003", ["name"]="John Smith",        ["email"]="john@corp.com",    ["department"]="Engineering",  ["role"]="Developer",["status"]="Inactive", ["joined"]="2020-11-20" },
+        new() { ["id"]="USR-004", ["name"]="Alice Johnson",     ["email"]="alice@corp.com",   ["department"]="HR",           ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-01-10" },
+        new() { ["id"]="USR-005", ["name"]="Bob Williams",      ["email"]="bob@corp.com",     ["department"]="Finance",      ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-05-05" },
+        new() { ["id"]="USR-006", ["name"]="Carol Martinez",    ["email"]="carol@corp.com",   ["department"]="Design",       ["role"]="Editor",   ["status"]="Inactive", ["joined"]="2022-09-14" },
+        new() { ["id"]="USR-007", ["name"]="David Lee",         ["email"]="david@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-08-30" },
+        new() { ["id"]="USR-008", ["name"]="Eve Wilson",        ["email"]="eve@corp.com",     ["department"]="Marketing",    ["role"]="Viewer",   ["status"]="Active",   ["joined"]="2023-03-22" },
+        new() { ["id"]="USR-009", ["name"]="Frank Brown",       ["email"]="frank@corp.com",   ["department"]="Finance",      ["role"]="Viewer",   ["status"]="Inactive", ["joined"]="2020-06-18" },
+        new() { ["id"]="USR-010", ["name"]="Grace Taylor",      ["email"]="grace@corp.com",   ["department"]="HR",           ["role"]="Editor",   ["status"]="Active",   ["joined"]="2022-12-01" },
+        new() { ["id"]="USR-011", ["name"]="Henry Anderson",    ["email"]="henry@corp.com",   ["department"]="Engineering",  ["role"]="Developer",["status"]="Active",   ["joined"]="2021-02-14" },
+        new() { ["id"]="USR-012", ["name"]="Isabella Thomas",   ["email"]="isabella@corp.com",["department"]="Marketing",    ["role"]="Admin",    ["status"]="Active",   ["joined"]="2019-10-09" },
     ];
 }

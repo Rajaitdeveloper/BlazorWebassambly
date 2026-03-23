@@ -34,21 +34,30 @@
     <div class="dg-toolbar">
         <div class="dg-search-wrap">
             <i class="fa-solid fa-magnifying-glass dg-search-icon"></i>
-            <input class="dg-search"
+            <input class="dg-search @(EnableSearchButton ? "dg-search-has-btn" : "")"
                    type="search"
                    placeholder="Search all columns…"
-                   @bind="_globalSearch"
-                   @bind:event="oninput" />
-            @if (!string.IsNullOrEmpty(_globalSearch))
+                   @bind="_searchInput"
+                   @bind:event="@(EnableSearchButton ? "onchange" : "oninput")"
+                   @onkeydown="OnSearchKeyDown" />
+            @if (!string.IsNullOrEmpty(_searchInput))
             {
-                <button class="dg-search-clear" @onclick="@(() => _globalSearch = string.Empty)" title="Clear">
+                <button class="dg-search-clear @(EnableSearchButton ? "dg-search-clear-with-btn" : "")"
+                        @onclick="ClearSearch" title="Clear">
                     <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+            @if (EnableSearchButton)
+            {
+                <button class="dg-search-btn" @onclick="ApplySearch" title="Search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>Search</span>
                 </button>
             }
         </div>
         <div class="dg-toolbar-right">
             <span class="dg-count">@_filtered.Count of @Rows.Count row@(Rows.Count != 1 ? "s" : "")</span>
-            @if (_filtered.Count != Rows.Count)
+            @if (_filtered.Count != Rows.Count || !string.IsNullOrEmpty(_searchInput))
             {
                 <button class="dg-btn-ghost" @onclick="ClearAll">
                     <i class="fa-solid fa-filter-circle-xmark"></i> Clear filters
@@ -62,7 +71,7 @@
     {
         <div class="dg-filters">
             @if (ShowRowNumbers) { <div class="dg-filter-cell dg-rn-cell"></div> }
-            @foreach (var col in Columns)
+            @foreach (var col in VisibleColumns)
             {
                 <div class="dg-filter-cell" style="width:@ColWidth(col); min-width:@ColMinWidth(col)">
                     @if (col.Filterable)
@@ -79,7 +88,7 @@
     }
 
     @* ── Desktop table ── *@
-    <div class="dg-table-wrap">
+    <div class="dg-table-wrap @(ShowScrollbar ? "dg-scrollable" : "")" style="@(ShowScrollbar ? $"max-height:{ScrollHeight}" : "")">
         <div class="dg-table" style="grid-template-columns: @GridTemplate">
 
             @* Header row *@
@@ -87,7 +96,7 @@
             {
                 <div class="dg-th dg-rn-cell">#</div>
             }
-            @foreach (var col in Columns)
+            @foreach (var col in VisibleColumns)
             {
                 <div class="dg-th @(col.Sortable ? "dg-th-sort" : "") @(SortKey == col.Key ? "dg-th-active" : "")"
                      @onclick="() => ToggleSort(col)">
@@ -107,6 +116,10 @@
                     }
                 </div>
             }
+            @if (HasRowActions)
+            {
+                <div class="dg-th dg-th-actions">@RowActionsLabel</div>
+            }
 
             @* Data rows *@
             @if (!_paged.Any())
@@ -122,13 +135,13 @@
                 {
                     @if (ShowRowNumbers)
                     {
-                        <div class="dg-td dg-rn-cell @(idx % 2 == 1 ? "dg-row-alt" : "")">
+                        <div class="dg-td dg-rn-cell @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx">
                             @(_pageIndex * _pageSize + idx + 1)
                         </div>
                     }
-                    @foreach (var col in Columns)
+                    @foreach (var col in VisibleColumns)
                     {
-                        <div class="dg-td @(idx % 2 == 1 ? "dg-row-alt" : "")" data-label="@col.Label">
+                        <div class="dg-td @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx" data-label="@col.Label">
                             @if (CellTemplate is not null)
                             {
                                 @CellTemplate(new CellContext { Column = col, Row = row, Value = row.GetValueOrDefault(col.Key) })
@@ -136,6 +149,29 @@
                             else
                             {
                                 @row.GetValueOrDefault(col.Key)
+                            }
+                        </div>
+                    }
+                    @if (HasRowActions)
+                    {
+                        <div class="dg-td dg-td-actions @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx">
+                            @if (OnView.HasDelegate)
+                            {
+                                <button class="dg-action-btn dg-action-view"
+                                        @onclick="() => OnView.InvokeAsync(new RowActionContext { Row = row })"
+                                        title="View">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <span>View</span>
+                                </button>
+                            }
+                            @if (OnEdit.HasDelegate)
+                            {
+                                <button class="dg-action-btn dg-action-edit"
+                                        @onclick="() => OnEdit.InvokeAsync(new RowActionContext { Row = row })"
+                                        title="Edit">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                    <span>Edit</span>
+                                </button>
                             }
                         </div>
                     }
@@ -162,7 +198,7 @@
                     {
                         <div class="dg-card-num">#@(_pageIndex * _pageSize + idx + 1)</div>
                     }
-                    @foreach (var col in Columns)
+                    @foreach (var col in VisibleColumns)
                     {
                         <div class="dg-card-row">
                             <span class="dg-card-label">@col.Label</span>
@@ -176,6 +212,29 @@
                                     @row.GetValueOrDefault(col.Key)
                                 }
                             </span>
+                        </div>
+                    }
+                    @if (HasRowActions)
+                    {
+                        <div class="dg-card-actions">
+                            @if (OnView.HasDelegate)
+                            {
+                                <button class="dg-action-btn dg-action-view"
+                                        @onclick="() => OnView.InvokeAsync(new RowActionContext { Row = row })"
+                                        title="View">
+                                    <i class="fa-solid fa-eye"></i>
+                                    <span>View</span>
+                                </button>
+                            }
+                            @if (OnEdit.HasDelegate)
+                            {
+                                <button class="dg-action-btn dg-action-edit"
+                                        @onclick="() => OnEdit.InvokeAsync(new RowActionContext { Row = row })"
+                                        title="Edit">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                    <span>Edit</span>
+                                </button>
+                            }
                         </div>
                     }
                 </div>
@@ -253,6 +312,14 @@
 
         /// <summary>Show a per-column filter input below the header.</summary>
         public bool Filterable { get; init; } = false;
+
+        /// <summary>
+        /// Hide this column from the rendered table and mobile cards.
+        /// The value is still present in the row dictionary — use it
+        /// to pass hidden IDs to OnView / OnEdit callbacks.
+        /// Example: new GridColumn { Key = "id", Label = "ID", Hidden = true }
+        /// </summary>
+        public bool Hidden { get; init; } = false;
     }
 
     /// <summary>
@@ -264,6 +331,23 @@
         public required GridColumn               Column { get; init; }
         public required Dictionary<string, object?> Row { get; init; }
         public object?                            Value { get; init; }
+    }
+
+    /// <summary>
+    /// Context passed to OnView and OnEdit callbacks.
+    /// Contains the full row dictionary so hidden ID columns are accessible.
+    /// </summary>
+    public sealed class RowActionContext
+    {
+        /// <summary>The full row data including hidden columns.</summary>
+        public required Dictionary<string, object?> Row { get; init; }
+
+        /// <summary>Shortcut to read a value by column key.</summary>
+        public object? Get(string key) => Row.GetValueOrDefault(key);
+
+        /// <summary>Shortcut to read a typed value by column key.</summary>
+        public T? Get<T>(string key) =>
+            Row.TryGetValue(key, out var v) && v is T typed ? typed : default;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -291,11 +375,63 @@
     /// </summary>
     [Parameter] public RenderFragment<CellContext>? CellTemplate { get; set; }
 
+    /// <summary>
+    /// Show a vertical scrollbar inside the table body.
+    /// When true, the table body is constrained to ScrollHeight and scrolls vertically.
+    /// Default false — table grows with content.
+    /// </summary>
+    [Parameter] public bool ShowScrollbar { get; set; } = false;
+
+    /// <summary>
+    /// Maximum height of the scrollable table body when ShowScrollbar is true.
+    /// Accepts any CSS height value: "400px", "60vh", "300px" etc.
+    /// Default "400px".
+    /// </summary>
+    [Parameter] public string ScrollHeight { get; set; } = "400px";
+
+    /// <summary>
+    /// When true, search only fires when the Search button is clicked or Enter is pressed.
+    /// Use this when rows are loaded from an API to avoid a request on every keystroke.
+    /// When false (default), search filters instantly on each keystroke.
+    /// </summary>
+    [Parameter] public bool EnableSearchButton { get; set; } = false;
+
+    /// <summary>
+    /// Callback fired when a search is triggered (button click or Enter).
+    /// Only raised when EnableSearchButton is true.
+    /// Receives the current search term — use it to call your API.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnSearch { get; set; }
+
+    /// <summary>
+    /// When set, a View button appears in the Actions column for each row.
+    /// Receives a RowActionContext — access hidden ID columns via context.Get("id").
+    /// </summary>
+    [Parameter] public EventCallback<RowActionContext> OnView { get; set; }
+
+    /// <summary>
+    /// When set, an Edit button appears in the Actions column for each row.
+    /// Receives a RowActionContext — access hidden ID columns via context.Get("id").
+    /// </summary>
+    [Parameter] public EventCallback<RowActionContext> OnEdit { get; set; }
+
+    /// <summary>
+    /// Header label for the Actions column. Default "Actions".
+    /// </summary>
+    [Parameter] public string RowActionsLabel { get; set; } = "Actions";
+
+    /// <summary>Convenience: true when at least one row action is configured.</summary>
+    bool HasRowActions => OnView.HasDelegate || OnEdit.HasDelegate;
+
+    /// <summary>Visible columns only (Hidden = false).</summary>
+    IEnumerable<GridColumn> VisibleColumns => Columns.Where(c => !c.Hidden);
+
     // ════════════════════════════════════════════════════════════
     //  INTERNAL STATE
     // ════════════════════════════════════════════════════════════
 
-    string  _globalSearch = string.Empty;
+    string  _globalSearch = string.Empty;  // committed search term used in filter pipeline
+    string  _searchInput  = string.Empty;  // live value bound to the input (pending when button mode)
     string? SortKey;
     bool    SortAsc    = true;
     int     _pageIndex = 0;
@@ -311,6 +447,36 @@
     {
         _pageSize = PageSize;
         Recompute();
+    }
+
+    // ── Search button helpers ─────────────────────────────────────────────────
+
+    /// <summary>Commit the search input and fire OnSearch callback (API mode).</summary>
+    async Task ApplySearch()
+    {
+        _globalSearch = _searchInput;
+        _pageIndex    = 0;
+        Recompute();
+        if (OnSearch.HasDelegate)
+            await OnSearch.InvokeAsync(_globalSearch);
+    }
+
+    /// <summary>Allow pressing Enter in the search box to trigger search.</summary>
+    async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (!EnableSearchButton) return;
+        if (e.Key == "Enter") await ApplySearch();
+    }
+
+    /// <summary>Clear both the input and the committed search term.</summary>
+    async Task ClearSearch()
+    {
+        _searchInput  = string.Empty;
+        _globalSearch = string.Empty;
+        _pageIndex    = 0;
+        Recompute();
+        if (EnableSearchButton && OnSearch.HasDelegate)
+            await OnSearch.InvokeAsync(string.Empty);
     }
 
     // ════════════════════════════════════════════════════════════
@@ -383,6 +549,7 @@
 
     void ClearAll()
     {
+        _searchInput  = string.Empty;
         _globalSearch = string.Empty;
         _colFilters.Clear();
         SortKey    = null;
@@ -426,7 +593,8 @@
         {
             var parts = new List<string>();
             if (ShowRowNumbers) parts.Add("48px");
-            parts.AddRange(Columns.Select(c => c.Width ?? "1fr"));
+            parts.AddRange(VisibleColumns.Select(c => c.Width ?? "1fr"));
+            if (HasRowActions) parts.Add("auto");
             return string.Join(" ", parts);
         }
     }
@@ -480,6 +648,23 @@
         transition: color .12s;
     }
     .dg-search-clear:hover { color: var(--txt, #1e293b); }
+
+    /* Search button mode — extra right padding for button */
+    .dg-search-has-btn { padding-right: 96px; }
+    .dg-search-clear-with-btn { right: 76px; }
+
+    .dg-search-btn {
+        position: absolute; right: 0; top: 0; bottom: 0;
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 0 14px;
+        background: var(--accent, #c81766); color: #fff;
+        border: none; border-radius: 0 var(--radius, 8px) var(--radius, 8px) 0;
+        font-size: 12px; font-weight: 700; cursor: pointer;
+        font-family: var(--font, inherit); white-space: nowrap;
+        transition: background .15s;
+    }
+    .dg-search-btn:hover { background: var(--accent-hover, #a81257); }
+    .dg-search-btn i { font-size: 11px; }
     .dg-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .dg-count { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
     .dg-btn-ghost {
@@ -513,6 +698,23 @@
 
     /* ── Table ── */
     .dg-table-wrap { overflow-x: auto; scrollbar-width: thin; }
+
+    /* ── Scrollable mode (ShowScrollbar=true) ── */
+    .dg-scrollable {
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--accent, #c81766) var(--surface-2, #f7f9fc);
+    }
+
+    /* Webkit scrollbar styling */
+    .dg-scrollable::-webkit-scrollbar        { width: 7px; height: 7px; }
+    .dg-scrollable::-webkit-scrollbar-track  { background: var(--surface-2, #f7f9fc); border-radius: 4px; }
+    .dg-scrollable::-webkit-scrollbar-thumb  { background: var(--accent, #c81766); border-radius: 4px; }
+    .dg-scrollable::-webkit-scrollbar-thumb:hover { background: var(--accent-hover, #a81257); }
+    .dg-scrollable::-webkit-scrollbar-corner { background: var(--surface-2, #f7f9fc); }
+
+    /* Keep header sticky inside scroll container */
+    .dg-scrollable .dg-th { position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 var(--border, #e2e8f0); }
     .dg-table { display: grid; min-width: 100%; }
 
     .dg-th {
@@ -542,8 +744,62 @@
         transition: background .1s;
     }
     .dg-row-alt { background: var(--surface-2, #f7f9fc); }
-    .dg-table:has(.dg-td:hover) .dg-td { background: rgba(200,23,102,.03); }
-    .dg-table .dg-td:hover { background: rgba(200,23,102,.07) !important; }
+
+    /* Hover only the cells in the same row — uses CSS subgrid row tracking via data-row */
+    /* Row hover — only cells sharing the same data-row value are highlighted.
+       :has() checks if ANY cell in this row is hovered, then applies to ALL cells in that row. */
+    .dg-table:has([data-row="0"]:hover) [data-row="0"],
+    .dg-table:has([data-row="1"]:hover) [data-row="1"],
+    .dg-table:has([data-row="2"]:hover) [data-row="2"],
+    .dg-table:has([data-row="3"]:hover) [data-row="3"],
+    .dg-table:has([data-row="4"]:hover) [data-row="4"],
+    .dg-table:has([data-row="5"]:hover) [data-row="5"],
+    .dg-table:has([data-row="6"]:hover) [data-row="6"],
+    .dg-table:has([data-row="7"]:hover) [data-row="7"],
+    .dg-table:has([data-row="8"]:hover) [data-row="8"],
+    .dg-table:has([data-row="9"]:hover) [data-row="9"],
+    .dg-table:has([data-row="10"]:hover) [data-row="10"],
+    .dg-table:has([data-row="11"]:hover) [data-row="11"],
+    .dg-table:has([data-row="12"]:hover) [data-row="12"],
+    .dg-table:has([data-row="13"]:hover) [data-row="13"],
+    .dg-table:has([data-row="14"]:hover) [data-row="14"],
+    .dg-table:has([data-row="15"]:hover) [data-row="15"],
+    .dg-table:has([data-row="16"]:hover) [data-row="16"],
+    .dg-table:has([data-row="17"]:hover) [data-row="17"],
+    .dg-table:has([data-row="18"]:hover) [data-row="18"],
+    .dg-table:has([data-row="19"]:hover) [data-row="19"],
+    .dg-table:has([data-row="20"]:hover) [data-row="20"],
+    .dg-table:has([data-row="21"]:hover) [data-row="21"],
+    .dg-table:has([data-row="22"]:hover) [data-row="22"],
+    .dg-table:has([data-row="23"]:hover) [data-row="23"],
+    .dg-table:has([data-row="24"]:hover) [data-row="24"],
+    .dg-table:has([data-row="25"]:hover) [data-row="25"],
+    .dg-table:has([data-row="26"]:hover) [data-row="26"],
+    .dg-table:has([data-row="27"]:hover) [data-row="27"],
+    .dg-table:has([data-row="28"]:hover) [data-row="28"],
+    .dg-table:has([data-row="29"]:hover) [data-row="29"],
+    .dg-table:has([data-row="30"]:hover) [data-row="30"],
+    .dg-table:has([data-row="31"]:hover) [data-row="31"],
+    .dg-table:has([data-row="32"]:hover) [data-row="32"],
+    .dg-table:has([data-row="33"]:hover) [data-row="33"],
+    .dg-table:has([data-row="34"]:hover) [data-row="34"],
+    .dg-table:has([data-row="35"]:hover) [data-row="35"],
+    .dg-table:has([data-row="36"]:hover) [data-row="36"],
+    .dg-table:has([data-row="37"]:hover) [data-row="37"],
+    .dg-table:has([data-row="38"]:hover) [data-row="38"],
+    .dg-table:has([data-row="39"]:hover) [data-row="39"],
+    .dg-table:has([data-row="40"]:hover) [data-row="40"],
+    .dg-table:has([data-row="41"]:hover) [data-row="41"],
+    .dg-table:has([data-row="42"]:hover) [data-row="42"],
+    .dg-table:has([data-row="43"]:hover) [data-row="43"],
+    .dg-table:has([data-row="44"]:hover) [data-row="44"],
+    .dg-table:has([data-row="45"]:hover) [data-row="45"],
+    .dg-table:has([data-row="46"]:hover) [data-row="46"],
+    .dg-table:has([data-row="47"]:hover) [data-row="47"],
+    .dg-table:has([data-row="48"]:hover) [data-row="48"],
+    .dg-table:has([data-row="49"]:hover) [data-row="49"] {
+        background: rgba(200,23,102,.07);
+    }
 
     .dg-empty {
         display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -604,5 +860,55 @@
         .dg-search-wrap { max-width: 100%; }
         .dg-pagination  { justify-content: center; }
         .dg-page-info   { width: 100%; text-align: center; }
+    }
+    /* ── Actions column ── */
+    .dg-th-actions {
+        justify-content: center;
+        min-width: 100px;
+    }
+    .dg-td-actions {
+        display: flex; align-items: center; justify-content: center;
+        gap: 6px; flex-wrap: wrap;
+    }
+    .dg-action-btn {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px; border-radius: 6px; border: 1px solid transparent;
+        font-size: 12px; font-weight: 600; cursor: pointer;
+        font-family: var(--font, inherit); white-space: nowrap;
+        transition: background .12s, border-color .12s, color .12s;
+    }
+    .dg-action-btn i { font-size: 11px; }
+
+    .dg-action-view {
+        background: var(--teal-faint, rgba(4,89,90,.12));
+        border-color: rgba(4,89,90,.2);
+        color: var(--teal, #04595a);
+    }
+    .dg-action-view:hover {
+        background: var(--teal, #04595a);
+        border-color: var(--teal, #04595a);
+        color: #fff;
+    }
+
+    .dg-action-edit {
+        background: var(--accent-faint, rgba(200,23,102,.1));
+        border-color: rgba(200,23,102,.2);
+        color: var(--accent, #c81766);
+    }
+    .dg-action-edit:hover {
+        background: var(--accent, #c81766);
+        border-color: var(--accent, #c81766);
+        color: #fff;
+    }
+
+    /* Mobile card actions */
+    .dg-card-actions {
+        display: flex; gap: 8px; padding-top: 6px;
+        border-top: 1px solid var(--border, #e2e8f0);
+        margin-top: 4px;
+    }
+
+    @@media (max-width: 640px) {
+        .dg-action-btn { flex: 1; justify-content: center; }
     }
 </style>
