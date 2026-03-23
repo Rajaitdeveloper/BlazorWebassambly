@@ -122,7 +122,7 @@
     }
 
     @* ── Desktop table ── *@
-    <div class="dg-table-wrap @(ShowScrollbar ? "dg-scrollable" : "")" style="@(ShowScrollbar ? $"max-height:{ScrollHeight}" : "")">
+    <div class="dg-table-wrap" style="@(ShowScrollbar ? $"max-height:{ScrollHeight};overflow-y:auto;overflow-x:auto;" : "overflow-x:auto;")">
         <div class="dg-table" style="grid-template-columns: @GridTemplate">
 
             @* Header row *@
@@ -167,48 +167,52 @@
             {
                 @foreach (var (row, idx) in _paged.Select((r, i) => (r, i)))
                 {
-                    @if (ShowRowNumbers)
-                    {
-                        <div class="dg-td dg-rn-cell @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx">
-                            @(_pageIndex * _pageSize + idx + 1)
-                        </div>
-                    }
-                    @foreach (var col in VisibleColumns)
-                    {
-                        <div class="dg-td @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx" data-label="@col.Label">
-                            @if (CellTemplate is not null)
-                            {
-                                @CellTemplate(new CellContext { Column = col, Row = row, Value = row.GetValueOrDefault(col.Key) })
-                            }
-                            else
-                            {
-                                @row.GetValueOrDefault(col.Key)
-                            }
-                        </div>
-                    }
-                    @if (HasRowActions)
-                    {
-                        <div class="dg-td dg-td-actions @(idx % 2 == 1 ? "dg-row-alt" : "")" data-row="@idx">
-                            @if (OnView.HasDelegate)
-                            {
-                                <button class="dg-action-btn dg-action-view"
-                                        @onclick="() => OnView.InvokeAsync(new RowActionContext { Row = row })"
-                                        title="View">
-                                    <i class="fa-solid fa-eye"></i>
-                                    <span>View</span>
-                                </button>
-                            }
-                            @if (OnEdit.HasDelegate)
-                            {
-                                <button class="dg-action-btn dg-action-edit"
-                                        @onclick="() => OnEdit.InvokeAsync(new RowActionContext { Row = row })"
-                                        title="Edit">
-                                    <i class="fa-solid fa-pen-to-square"></i>
-                                    <span>Edit</span>
-                                </button>
-                            }
-                        </div>
-                    }
+                    @* display:contents makes dg-row invisible to the CSS grid layout
+                       but keeps it as a real DOM element — so .dg-row:hover .dg-td works *@
+                    <div class="dg-row @(idx % 2 == 1 ? "dg-row-alt" : "")">
+                        @if (ShowRowNumbers)
+                        {
+                            <div class="dg-td dg-rn-cell">
+                                @(_pageIndex * _pageSize + idx + 1)
+                            </div>
+                        }
+                        @foreach (var col in VisibleColumns)
+                        {
+                            <div class="dg-td" data-label="@col.Label">
+                                @if (CellTemplate is not null)
+                                {
+                                    @CellTemplate(new CellContext { Column = col, Row = row, Value = row.GetValueOrDefault(col.Key) })
+                                }
+                                else
+                                {
+                                    @row.GetValueOrDefault(col.Key)
+                                }
+                            </div>
+                        }
+                        @if (HasRowActions)
+                        {
+                            <div class="dg-td dg-td-actions">
+                                @if (OnView.HasDelegate)
+                                {
+                                    <button class="dg-action-btn dg-action-view"
+                                            @onclick="() => OnView.InvokeAsync(new RowActionContext { Row = row })"
+                                            title="View">
+                                        <i class="fa-solid fa-eye"></i>
+                                        <span>View</span>
+                                    </button>
+                                }
+                                @if (OnEdit.HasDelegate)
+                                {
+                                    <button class="dg-action-btn dg-action-edit"
+                                            @onclick="() => OnEdit.InvokeAsync(new RowActionContext { Row = row })"
+                                            title="Edit">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                        <span>Edit</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
                 }
             }
         </div>
@@ -453,9 +457,18 @@
     //  LIFECYCLE
     // ════════════════════════════════════════════════════════════
 
+    bool _initialised = false;
+
     protected override void OnParametersSet()
     {
-        _pageSize      = PageSize;
+        // Only set _pageSize from the parameter on first render.
+        // After that, the user's selection in the dropdown owns _pageSize.
+        if (!_initialised)
+        {
+            _pageSize    = PageSize;
+            _initialised = true;
+        }
+
         VisibleColumns = Columns.Where(col => !col.Hidden).ToList();
 
         if (ServerSide)
@@ -722,6 +735,8 @@
             return string.Join(" ", parts);
         }
     }
+
+
 }
 
 <style>
@@ -844,17 +859,17 @@
     .dg-col-filter-btn:hover { background: var(--accent-hover, #a81257); }
 
     /* ── Table ── */
-    .dg-table-wrap { overflow-x: auto; scrollbar-width: thin; }
-    .dg-scrollable {
-        overflow-y: auto; scrollbar-width: thin;
+    .dg-table-wrap {
+        scrollbar-width: thin;
         scrollbar-color: var(--accent, #c81766) var(--surface-2, #f7f9fc);
     }
-    .dg-scrollable::-webkit-scrollbar        { width: 7px; height: 7px; }
-    .dg-scrollable::-webkit-scrollbar-track  { background: var(--surface-2, #f7f9fc); border-radius: 4px; }
-    .dg-scrollable::-webkit-scrollbar-thumb  { background: var(--accent, #c81766); border-radius: 4px; }
-    .dg-scrollable::-webkit-scrollbar-thumb:hover { background: var(--accent-hover, #a81257); }
-    .dg-scrollable::-webkit-scrollbar-corner { background: var(--surface-2, #f7f9fc); }
-    .dg-scrollable .dg-th { position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 var(--border, #e2e8f0); }
+    .dg-table-wrap::-webkit-scrollbar        { width: 7px; height: 7px; }
+    .dg-table-wrap::-webkit-scrollbar-track  { background: var(--surface-2, #f7f9fc); border-radius: 4px; }
+    .dg-table-wrap::-webkit-scrollbar-thumb  { background: var(--accent, #c81766); border-radius: 4px; }
+    .dg-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--accent-hover, #a81257); }
+    .dg-table-wrap::-webkit-scrollbar-corner { background: var(--surface-2, #f7f9fc); }
+    /* Sticky headers work inside any scrolling container */
+    .dg-table-wrap .dg-th { position: sticky; top: 0; z-index: 3; box-shadow: 0 1px 0 var(--border, #e2e8f0); }
 
     .dg-table { display: grid; min-width: 100%; }
     .dg-th {
@@ -878,59 +893,15 @@
         border-bottom: 1px solid var(--border, #e2e8f0);
         color: var(--txt, #1e293b); word-break: break-word; transition: background .1s;
     }
-    .dg-row-alt { background: var(--surface-2, #f7f9fc); }
+    /* display:contents removes the div from box layout — grid children flow through directly */
+    .dg-row          { display: contents; }
+    .dg-row-alt .dg-td { background: var(--surface-2, #f7f9fc); }
+    .dg-row:hover .dg-td { background: rgba(200,23,102,.07); }
 
-    /* Row hover — scoped to data-row index */
-    .dg-table:has([data-row="0"]:hover) [data-row="0"],
-    .dg-table:has([data-row="1"]:hover) [data-row="1"],
-    .dg-table:has([data-row="2"]:hover) [data-row="2"],
-    .dg-table:has([data-row="3"]:hover) [data-row="3"],
-    .dg-table:has([data-row="4"]:hover) [data-row="4"],
-    .dg-table:has([data-row="5"]:hover) [data-row="5"],
-    .dg-table:has([data-row="6"]:hover) [data-row="6"],
-    .dg-table:has([data-row="7"]:hover) [data-row="7"],
-    .dg-table:has([data-row="8"]:hover) [data-row="8"],
-    .dg-table:has([data-row="9"]:hover) [data-row="9"],
-    .dg-table:has([data-row="10"]:hover) [data-row="10"],
-    .dg-table:has([data-row="11"]:hover) [data-row="11"],
-    .dg-table:has([data-row="12"]:hover) [data-row="12"],
-    .dg-table:has([data-row="13"]:hover) [data-row="13"],
-    .dg-table:has([data-row="14"]:hover) [data-row="14"],
-    .dg-table:has([data-row="15"]:hover) [data-row="15"],
-    .dg-table:has([data-row="16"]:hover) [data-row="16"],
-    .dg-table:has([data-row="17"]:hover) [data-row="17"],
-    .dg-table:has([data-row="18"]:hover) [data-row="18"],
-    .dg-table:has([data-row="19"]:hover) [data-row="19"],
-    .dg-table:has([data-row="20"]:hover) [data-row="20"],
-    .dg-table:has([data-row="21"]:hover) [data-row="21"],
-    .dg-table:has([data-row="22"]:hover) [data-row="22"],
-    .dg-table:has([data-row="23"]:hover) [data-row="23"],
-    .dg-table:has([data-row="24"]:hover) [data-row="24"],
-    .dg-table:has([data-row="25"]:hover) [data-row="25"],
-    .dg-table:has([data-row="26"]:hover) [data-row="26"],
-    .dg-table:has([data-row="27"]:hover) [data-row="27"],
-    .dg-table:has([data-row="28"]:hover) [data-row="28"],
-    .dg-table:has([data-row="29"]:hover) [data-row="29"],
-    .dg-table:has([data-row="30"]:hover) [data-row="30"],
-    .dg-table:has([data-row="31"]:hover) [data-row="31"],
-    .dg-table:has([data-row="32"]:hover) [data-row="32"],
-    .dg-table:has([data-row="33"]:hover) [data-row="33"],
-    .dg-table:has([data-row="34"]:hover) [data-row="34"],
-    .dg-table:has([data-row="35"]:hover) [data-row="35"],
-    .dg-table:has([data-row="36"]:hover) [data-row="36"],
-    .dg-table:has([data-row="37"]:hover) [data-row="37"],
-    .dg-table:has([data-row="38"]:hover) [data-row="38"],
-    .dg-table:has([data-row="39"]:hover) [data-row="39"],
-    .dg-table:has([data-row="40"]:hover) [data-row="40"],
-    .dg-table:has([data-row="41"]:hover) [data-row="41"],
-    .dg-table:has([data-row="42"]:hover) [data-row="42"],
-    .dg-table:has([data-row="43"]:hover) [data-row="43"],
-    .dg-table:has([data-row="44"]:hover) [data-row="44"],
-    .dg-table:has([data-row="45"]:hover) [data-row="45"],
-    .dg-table:has([data-row="46"]:hover) [data-row="46"],
-    .dg-table:has([data-row="47"]:hover) [data-row="47"],
-    .dg-table:has([data-row="48"]:hover) [data-row="48"],
-    .dg-table:has([data-row="49"]:hover) [data-row="49"] { background: rgba(200,23,102,.07); }
+    /* Row hover — .dg-row uses display:contents so it participates in the
+       CSS grid layout while still being a targetable DOM element.
+       .dg-row:hover .dg-td highlights all cells in that row cleanly. */
+    .dg-row:hover .dg-td { background: rgba(200,23,102,.07); }
 
     .dg-empty { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 20px; color: var(--txt-3, #94a3b8); font-size: 14px; }
     .dg-empty i { font-size: 22px; }
