@@ -33,31 +33,6 @@
         </div>
     }
 
-    @* ── Last query fired — shows what the API would receive ── *@
-    @if (_lastQuery is not null)
-    {
-        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius);
-                    padding:12px 16px; font-size:12px; color:var(--txt-2); display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-            <span style="font-weight:700; color:var(--txt);">Last query sent to API:</span>
-            <span>Search: <code>@((string.IsNullOrWhiteSpace(_lastQuery.SearchTerm) ? "—" : _lastQuery.SearchTerm))</code></span>
-            @foreach (var f in _lastQuery.Filters)
-            {
-                <span>@f.Key: <code>@f.Value</code></span>
-            }
-            <span>Sort: <code>@(_lastQuery.SortKey ?? "—") @(_lastQuery.SortKey != null ? (_lastQuery.SortAscending ? "↑" : "↓") : "")</code></span>
-            <span>Page: <code>@(_lastQuery.Page + 1)</code></span>
-            <span>PageSize: <code>@_lastQuery.PageSize</code></span>
-            @if (_loading)
-            {
-                <span style="margin-left:auto; display:flex; align-items:center; gap:6px; color:var(--accent);">
-                    <span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--accent-faint);
-                                 border-top-color:var(--accent);animation:dg-spin .7s linear infinite;display:inline-block;"></span>
-                    Loading…
-                </span>
-            }
-        </div>
-    }
-
     @* ── DataGrid in server-side mode ── *@
     <DataGrid Columns="_columns"
               Rows="_rows"
@@ -65,10 +40,10 @@
               ShowRowNumbers="true"
               ServerSide="true"
               TotalCount="@_totalCount"
-              EnableSearchButton="true"
+              EnableSearchButton="false"
               EnableFilterButton="true"
               ShowScrollbar="true"
-              ScrollHeight="500px"
+              ScrollHeight="360px"
               OnQuery="HandleQuery"
               OnView="HandleView"
               OnEdit="HandleEdit">
@@ -114,9 +89,13 @@
         new() { Key = "name",       Label = "Full Name",    Width = "180px", Sortable = true, Filterable = true  },
         new() { Key = "email",      Label = "Email",        Width = "1fr",   Sortable = true, Filterable = true  },
         new() { Key = "department", Label = "Department",   Width = "150px", Sortable = true, Filterable = true  },
-        new() { Key = "role",       Label = "Role",         Width = "120px", Sortable = true, Filterable = true  },
-        new() { Key = "status",     Label = "Status",       Width = "100px", Sortable = true, Filterable = true  },
-        new() { Key = "joined",     Label = "Joined",       Width = "110px", Sortable = true                     },
+        new() { Key = "role", Label = "Role", Width = "120px", Sortable = true, Filterable = true,
+              FilterType = DataGrid.GridFilterType.Dropdown,
+              FilterOptions = [("Admin","Admin"),("Editor","Editor"),("Developer","Developer"),("Viewer","Viewer")] },
+        new() { Key = "status", Label = "Status", Width = "100px", Sortable = true, Filterable = true,
+              FilterType = DataGrid.GridFilterType.Dropdown,
+              FilterOptions = [("Active","Active"),("Inactive","Inactive")] },
+        new() { Key = "joined",     Label = "Joined",       Width = "130px", Sortable = true, Filterable = true, FilterType = DataGrid.GridFilterType.Date },
     ];
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -125,7 +104,6 @@
     int                               _totalCount = 0;
     string                            _toast      = string.Empty;
     bool                              _loading    = false;
-    DataGrid.GridQuery?               _lastQuery  = null;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -148,7 +126,6 @@
     async Task LoadData(DataGrid.GridQuery query)
     {
         _loading   = true;
-        _lastQuery = query;
         StateHasChanged();
 
         try
@@ -206,12 +183,19 @@
                 if (string.IsNullOrWhiteSpace(value)) continue;
                 var filterKey = key;
                 var filterVal = value;
+                // Date columns match on StartsWith (e.g. "2021" matches "2021-03-15")
+                var colDef = _columns.FirstOrDefault(col => col.Key == filterKey);
+                var isDate = colDef?.FilterType is DataGrid.GridFilterType.Date
+                                                or DataGrid.GridFilterType.DateTime
+                                                or DataGrid.GridFilterType.Time;
                 source = source.Where(r =>
                 {
                     var cell = r.GetValueOrDefault(filterKey);
-                    return cell != null &&
-                           cell.ToString() != null &&
-                           cell.ToString()!.Contains(filterVal, StringComparison.OrdinalIgnoreCase);
+                    if (cell == null) return false;
+                    var cellStr = cell.ToString() ?? string.Empty;
+                    return isDate
+                        ? cellStr.StartsWith(filterVal, StringComparison.OrdinalIgnoreCase)
+                        : cellStr.Contains(filterVal, StringComparison.OrdinalIgnoreCase);
                 });
             }
 

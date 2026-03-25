@@ -33,52 +33,44 @@
 
 @using Microsoft.AspNetCore.Components.Web
 
-@* ── Toolbar ── *@
+@* ── Toolbar rules:
+   EnableSearchButton=true  → show global search bar
+   EnableFilterButton=true  → show column filter row
+   Both true                → show both search bar + filter row
+   Both false               → show neither (columns + grid only)
+   Row count + Clear filters always shown in bottom bar
+*@
 <div class="dg-wrap">
 
-    <div class="dg-toolbar">
-        <div class="dg-search-wrap">
-            <i class="fa-solid fa-magnifying-glass dg-search-icon"></i>
-            <input class="dg-search @(EnableSearchButton ? "dg-search-has-btn" : "")"
-                   type="text"
-                   placeholder="Search all columns…"
-                   @bind="_searchInput"
-                   @bind:event="@(EnableSearchButton ? "onchange" : "oninput")"
-                   @onkeydown="OnSearchKeyDown" />
-            @if (!string.IsNullOrEmpty(_searchInput))
-            {
-                <button class="dg-search-clear @(EnableSearchButton ? "dg-search-clear-with-btn" : "")"
-                        @onclick="ClearSearch" title="Clear">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            }
-            @if (EnableSearchButton)
-            {
+    @* Global search bar — only when EnableSearchButton=true *@
+    @if (EnableSearchButton)
+    {
+        <div class="dg-toolbar">
+            <div class="dg-search-wrap">
+                <i class="fa-solid fa-magnifying-glass dg-search-icon"></i>
+                <input class="dg-search dg-search-has-btn"
+                       type="text"
+                       placeholder="Search all columns…"
+                       @bind="_searchInput"
+                       @bind:event="onchange"
+                       @onkeydown="OnSearchKeyDown" />
+                @if (!string.IsNullOrEmpty(_searchInput))
+                {
+                    <button class="dg-search-clear dg-search-clear-with-btn"
+                            @onclick="ClearSearch" title="Clear">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                }
                 <button class="dg-search-btn" @onclick="ApplySearch" title="Search">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <span>Search</span>
                 </button>
-            }
+            </div>
         </div>
-        <div class="dg-toolbar-right">
-            <span class="dg-count">
-                @(_displayTotal) row@(_displayTotal != 1 ? "s" : "")
-                @if (!ServerSide && _filtered.Count != Rows.Count)
-                {
-                    <span> of @Rows.Count</span>
-                }
-            </span>
-            @if (HasActiveFilters)
-            {
-                <button class="dg-btn-ghost" @onclick="async () => await ClearAll()">
-                    <i class="fa-solid fa-filter-circle-xmark"></i> Clear filters
-                </button>
-            }
-        </div>
-    </div>
+    }
 
-    @* ── Column filters ── *@
-    @if (VisibleColumns.Any(c => c.Filterable))
+    @* Column filter row — only when EnableFilterButton=true and columns are filterable *@
+    @if (EnableFilterButton && VisibleColumns.Any(col => col.Filterable))
     {
         <div class="dg-filters">
             @if (ShowRowNumbers) { <div class="dg-filter-cell dg-rn-cell"></div> }
@@ -87,29 +79,72 @@
                 <div class="dg-filter-cell" style="width:@ColWidth(col); min-width:@ColMinWidth(col)">
                     @if (col.Filterable)
                     {
-                        <div class="dg-col-filter-wrap">
-                            <input class="dg-col-filter @(EnableFilterButton ? "dg-col-filter-has-btn" : "")"
-                                   type="text"
-                                   placeholder="@col.Label…"
-                                   value="@GetColFilterInput(col.Key)"
-                                   @oninput="e => OnColFilterInput(col.Key, e.Value?.ToString())"
-                                   @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                        <div class="dg-col-filter-wrap @(col.FilterType == GridFilterType.Dropdown ? "dg-col-filter-wrap--dropdown" : col.FilterType != GridFilterType.Text ? "dg-col-filter-wrap--date" : "")">
+
+                            @if (col.FilterType == GridFilterType.Date)
+                            {
+                                @* Date picker *@
+                                <input class="dg-col-filter dg-col-filter-date dg-col-filter-has-btn"
+                                       type="date"
+                                       value="@GetColFilterInput(col.Key)"
+                                       @onchange="e => OnColFilterInput(col.Key, e.Value?.ToString())"
+                                       @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                            }
+                            else if (col.FilterType == GridFilterType.DateTime)
+                            {
+                                @* Date + time picker *@
+                                <input class="dg-col-filter dg-col-filter-date dg-col-filter-has-btn"
+                                       type="datetime-local"
+                                       value="@GetColFilterInput(col.Key)"
+                                       @onchange="e => OnColFilterInput(col.Key, e.Value?.ToString())"
+                                       @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                            }
+                            else if (col.FilterType == GridFilterType.Time)
+                            {
+                                @* Time-only picker *@
+                                <input class="dg-col-filter dg-col-filter-date dg-col-filter-has-btn"
+                                       type="time"
+                                       value="@GetColFilterInput(col.Key)"
+                                       @onchange="e => OnColFilterInput(col.Key, e.Value?.ToString())"
+                                       @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                            }
+                            else if (col.FilterType == GridFilterType.Dropdown)
+                            {
+                                @* Dropdown with Search + Reset buttons *@
+                                <select class="dg-col-filter dg-col-filter-select dg-col-filter-has-btn"
+                                        value="@GetColFilterInput(col.Key)"
+                                        @onchange="e => OnColFilterInput(col.Key, e.Value?.ToString())">
+                                    <option value="">All @col.Label</option>
+                                    @foreach (var opt in col.FilterOptions)
+                                    {
+                                        <option value="@opt.Value">@opt.Label</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                @* Default: plain text input *@
+                                <input class="dg-col-filter dg-col-filter-has-btn"
+                                       type="text"
+                                       placeholder="@col.Label…"
+                                       value="@GetColFilterInput(col.Key)"
+                                       @oninput="e => OnColFilterInput(col.Key, e.Value?.ToString())"
+                                       @onkeydown="e => OnColFilterKeyDown(e, col.Key)" />
+                            }
+
                             @if (!string.IsNullOrEmpty(GetColFilterInput(col.Key)))
                             {
                                 <button class="dg-col-filter-clear"
                                         @onclick="() => ClearColFilter(col.Key)"
-                                        title="Clear">
+                                        title="Reset">
                                     <i class="fa-solid fa-xmark"></i>
                                 </button>
                             }
-                            @if (EnableFilterButton)
-                            {
-                                <button class="dg-col-filter-btn"
-                                        @onclick="() => ApplyColFilter(col.Key)"
-                                        title="Filter">
-                                    <i class="fa-solid fa-magnifying-glass"></i>
-                                </button>
-                            }
+                            <button class="dg-col-filter-btn"
+                                    @onclick="() => ApplyColFilter(col.Key)"
+                                    title="Search">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </button>
                         </div>
                     }
                 </div>
@@ -281,11 +316,28 @@
     </div>
 
     @* ── Pagination ── *@
-    @if (_totalPages > 1)
+    @* Bottom bar always visible — shows row count, clear, and pagination when > 1 page *@
+    @if (true)
     {
         <div class="dg-pagination">
-            <span class="dg-page-info">Page @(_pageIndex + 1) of @_totalPages</span>
-            <div class="dg-page-btns">
+            <span class="dg-count">
+                @(_displayTotal) row@(_displayTotal != 1 ? "s" : "")
+                @if (!ServerSide && _filtered.Count != Rows.Count)
+                {
+                    <span class="dg-count-total"> of @Rows.Count</span>
+                }
+            </span>
+            @if (HasActiveFilters)
+            {
+                <button class="dg-btn-ghost" @onclick="async () => await ClearAll()">
+                    <i class="fa-solid fa-filter-circle-xmark"></i> Clear
+                </button>
+            }
+            @if (_totalPages > 1)
+            {
+                <span class="dg-page-info">Page @(_pageIndex + 1) of @_totalPages</span>
+            }
+            <div class="dg-page-btns" style="@(_totalPages <= 1 ? "display:none" : "")">
                 <button class="dg-page-btn" @onclick="FirstPage" disabled="@(_pageIndex == 0)" title="First">
                     <i class="fa-solid fa-angles-left"></i>
                 </button>
@@ -304,7 +356,7 @@
                     <i class="fa-solid fa-angles-right"></i>
                 </button>
             </div>
-            <select class="dg-page-size" @bind="_pageSize" @bind:after="OnPageSizeChanged">
+            <select class="dg-page-size" @bind="_pageSize" @bind:after="OnPageSizeChanged" style="margin-left:auto">
                 <option value="5">5 / page</option>
                 <option value="10">10 / page</option>
                 <option value="25">25 / page</option>
@@ -321,15 +373,55 @@
     //  MODELS
     // ════════════════════════════════════════════════════════════
 
+    /// <summary>Controls what type of input is rendered in the column filter row.</summary>
+    public enum GridFilterType
+    {
+        /// <summary>Plain text input (default).</summary>
+        Text,
+        /// <summary>Date picker — value sent as "yyyy-MM-dd".</summary>
+        Date,
+        /// <summary>Date + time picker — value sent as "yyyy-MM-ddTHH:mm".</summary>
+        DateTime,
+        /// <summary>Time-only picker — value sent as "HH:mm".</summary>
+        Time,
+        /// <summary>
+        /// Dropdown select — populate FilterOptions on the column.
+        /// Value sent is the selected option value (or "" for "All").
+        /// </summary>
+        Dropdown,
+    }
+
     public sealed class GridColumn
     {
-        public required string Key        { get; init; }
-        public required string Label      { get; init; }
-        public string?         Width      { get; init; } = "1fr";
-        public string?         MinWidth   { get; init; } = "80px";
-        public bool            Sortable   { get; init; } = false;
-        public bool            Filterable { get; init; } = false;
-        public bool            Hidden     { get; init; } = false;
+        public required string   Key        { get; init; }
+        public required string   Label      { get; init; }
+        public string?           Width      { get; init; } = "1fr";
+        public string?           MinWidth   { get; init; } = "80px";
+        public bool              Sortable   { get; init; } = false;
+        public bool              Filterable { get; init; } = false;
+        public bool              Hidden     { get; init; } = false;
+
+        /// <summary>
+        /// Input type rendered in the filter row.
+        /// Default is Text. Use Date, DateTime, Time, or Dropdown.
+        /// Example: new GridColumn { Key = "joined", FilterType = GridFilterType.Date }
+        /// </summary>
+        public GridFilterType    FilterType    { get; init; } = GridFilterType.Text;
+
+        /// <summary>
+        /// Options for Dropdown filter type.
+        /// Each entry is a (Value, Label) tuple.
+        /// An "All" option is automatically prepended.
+        ///
+        /// Example:
+        ///   FilterOptions = [("Active", "Active"), ("Inactive", "Inactive")]
+        ///
+        /// To auto-build options from your data, use:
+        ///   FilterOptions = rows.Select(r => r["status"]?.ToString() ?? "")
+        ///                       .Distinct().Order()
+        ///                       .Select(v => (v, v)).ToList()
+        /// </summary>
+        public IReadOnlyList<(string Value, string Label)> FilterOptions { get; init; } = [];
     }
 
     public sealed class CellContext
@@ -689,7 +781,17 @@
             {
                 if (string.IsNullOrWhiteSpace(filter)) continue;
                 var val = row.GetValueOrDefault(key)?.ToString() ?? string.Empty;
-                if (!val.Contains(filter, StringComparison.OrdinalIgnoreCase)) return false;
+
+                // For date/datetime/time columns use StartsWith for exact prefix match
+                var colDef = Columns.FirstOrDefault(col => col.Key == key);
+                var isDate = colDef?.FilterType is GridFilterType.Date
+                                               or GridFilterType.DateTime
+                                               or GridFilterType.Time;
+                var match = isDate
+                    ? val.StartsWith(filter, StringComparison.OrdinalIgnoreCase)
+                    : val.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+                if (!match) return false;
             }
             return true;
         }).ToList();
@@ -754,10 +856,11 @@
     /* ── Toolbar ── */
     .dg-toolbar {
         display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-        padding: 14px 16px;
+        padding: 12px 16px;
         border-bottom: 1px solid var(--border, #e2e8f0);
         background: var(--surface-2, #f7f9fc);
     }
+    .dg-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
     .dg-search-wrap { position: relative; flex: 1; min-width: 180px; max-width: 340px; }
     .dg-search-icon {
         position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
@@ -801,8 +904,8 @@
     .dg-search-btn:hover { background: var(--accent-hover, #a81257); }
     .dg-search-btn i { font-size: 11px; }
 
-    .dg-toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-    .dg-count { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
+    .dg-count       { font-size: 12px; font-weight: 600; color: var(--txt-2, #475569); white-space: nowrap; }
+    .dg-count-total { font-weight: 400; color: var(--txt-3, #94a3b8); }
     .dg-btn-ghost {
         display: inline-flex; align-items: center; gap: 6px;
         background: none; border: 1px solid var(--border, #e2e8f0);
@@ -815,17 +918,23 @@
 
     /* ── Column filters ── */
     .dg-filters {
-        display: flex; align-items: center;
+        display: flex; align-items: stretch;
         border-bottom: 1px solid var(--border, #e2e8f0);
         background: var(--surface-2, #f7f9fc);
         overflow-x: auto; scrollbar-width: none;
     }
     .dg-filters::-webkit-scrollbar { display: none; }
-    .dg-filter-cell { padding: 6px 8px; flex-shrink: 0; }
+    /* When toolbar is also shown, suppress double top padding */
+    .dg-filter-cell {
+        padding: 8px 10px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+    }
 
-    .dg-col-filter-wrap { position: relative; display: flex; align-items: center; }
+    .dg-col-filter-wrap { position: relative; display: flex; align-items: center; width: 100%; }
     .dg-col-filter {
-        width: 100%; padding: 5px 24px 5px 8px;
+        width: 100%; padding: 6px 24px 6px 8px;
         border: 1px solid var(--border, #e2e8f0);
         border-radius: 6px; font-size: 12px;
         background: var(--surface, #fff); color: var(--txt, #1e293b);
@@ -836,6 +945,39 @@
     .dg-col-filter::-ms-clear { display: none; }
     .dg-col-filter:focus { border-color: var(--accent, #c81766); }
     .dg-col-filter-has-btn { padding-right: 52px; }
+
+    /* Date / DateTime / Time inputs */
+    .dg-col-filter-date {
+        padding-left: 6px;
+        /* Browser native calendar icon sits on the right — we keep room for our search button */
+        cursor: pointer;
+    }
+    /* Suppress default browser clear on date inputs in some browsers */
+    .dg-col-filter-date::-webkit-calendar-picker-indicator {
+        opacity: 0.5;
+        cursor: pointer;
+    }
+    .dg-col-filter-date::-webkit-inner-spin-button { display: none; }
+    /* Wrapper for date columns — slightly wider minimum to fit the date format */
+    .dg-col-filter-wrap--date { min-width: 160px; }
+
+    /* Dropdown select filter */
+    .dg-col-filter-select {
+        width: 100%;
+        padding: 6px 52px 6px 8px;
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: 6px;
+        font-size: 12px;
+        background: var(--surface, #fff);
+        color: var(--txt, #1e293b);
+        font-family: var(--font, inherit);
+        outline: none;
+        cursor: pointer;
+        transition: border-color .15s;
+        appearance: auto;
+    }
+    .dg-col-filter-select:focus { border-color: var(--accent, #c81766); }
+    .dg-col-filter-wrap--dropdown { min-width: 140px; }
 
     .dg-col-filter-clear {
         position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
@@ -919,7 +1061,12 @@
     .dg-card-actions { display: flex; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border, #e2e8f0); margin-top: 4px; }
 
     /* ── Pagination ── */
-    .dg-pagination { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--border, #e2e8f0); background: var(--surface-2, #f7f9fc); }
+    .dg-pagination {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+    }
     .dg-page-info { font-size: 12px; color: var(--txt-3, #94a3b8); white-space: nowrap; }
     .dg-page-btns { display: flex; align-items: center; gap: 4px; margin: 0 auto; }
     .dg-page-btn { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--border, #e2e8f0); border-radius: var(--radius, 8px); background: var(--surface, #fff); color: var(--txt-2, #475569); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font, inherit); display: flex; align-items: center; justify-content: center; transition: background .12s, border-color .12s, color .12s; }
@@ -940,11 +1087,31 @@
 
     /* ── Responsive ── */
     @@media (max-width: 640px) {
-        .dg-table-wrap { display: none; }
-        .dg-filters     { display: none; }
+        /* Hide desktop table, show card layout */
+        .dg-table-wrap  { display: none; }
         .dg-cards       { display: block; }
+
+        /* Toolbar — full width search */
         .dg-toolbar     { padding: 10px 12px; }
         .dg-search-wrap { max-width: 100%; }
+
+        /* Filter row — stack vertically on mobile */
+        .dg-filters {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 8px 10px;
+            gap: 6px;
+        }
+        .dg-filter-cell {
+            padding: 0;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+        .dg-col-filter-wrap { width: 100%; }
+        .dg-col-filter,
+        .dg-col-filter-select { width: 100%; }
+
+        /* Pagination */
         .dg-pagination  { justify-content: center; }
         .dg-page-info   { width: 100%; text-align: center; }
         .dg-action-btn  { flex: 1; justify-content: center; }
