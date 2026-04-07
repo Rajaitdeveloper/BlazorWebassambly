@@ -1,0 +1,499 @@
+@* Pages/Demo/UtilitiesDemo.razor *@
+@page "/utilities-demo"
+@attribute [AllowAnonymous]
+
+@using BlazoreTestPortal.Client.Shared.Utilities
+
+<PageTitle>UI Utilities Demo - Tindo Blazor</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:24px; max-width:900px;">
+
+    <div>
+        <h2 style="font-size:20px; font-weight:700; color:var(--txt); margin:0 0 4px">UI Utilities Demo</h2>
+        <p style="font-size:13px; color:var(--txt-3); margin:0">
+            All form components — Full / Half / Third width options, events, validation states.
+        </p>
+    </div>
+
+    @* ── Toast ── *@
+    @if (!string.IsNullOrEmpty(_toast))
+    {
+        <div style="padding:12px 16px; background:var(--surface); border:1px solid var(--border);
+                    border-left:4px solid var(--teal); border-radius:var(--radius);
+                    font-size:13px; color:var(--txt); display:flex; align-items:center; gap:10px;">
+            <i class="fa-solid fa-circle-check" style="color:var(--teal)"></i>
+            @_toast
+            <button @onclick="@(() => _toast = string.Empty)"
+                    style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--txt-3);">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    }
+
+    @* ══════════════════════════════════════════
+       Card 1 — Text inputs
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Text Inputs"
+                Description="Full, Half and Third width variants. Supports icons, help text, error state."
+                Icon="fa-solid fa-keyboard">
+        <Fields>
+            @* Full width *@
+            <UiTextBox Label="Full Name"
+                       Placeholder="Enter your full name"
+                       Width="UiTextBox.FieldWidth.Full"
+                       Required="true"
+                       LeadIcon="fa-solid fa-user"
+                       @bind-Value="_fullName"
+                       OnValueChanged="OnFullNameChanged" />
+
+            @* Two halves *@
+            <UiTextBox Label="Email Address"
+                       Placeholder="you@example.com"
+                       Type="email"
+                       Width="UiTextBox.FieldWidth.Half"
+                       LeadIcon="fa-solid fa-envelope"
+                       @bind-Value="_email"
+                       OnValueChanged="OnEmailChanged" />
+
+            <UiTextBox Label="Phone"
+                       Placeholder="+1 (555) 000-0000"
+                       Type="tel"
+                       Width="UiTextBox.FieldWidth.Half"
+                       LeadIcon="fa-solid fa-phone"
+                       @bind-Value="_phone"
+                       OnValueChanged="OnPhoneChanged" />
+
+            @* Three thirds *@
+            <UiTextBox Label="City"
+                       Placeholder="City"
+                       Width="UiTextBox.FieldWidth.Third"
+                       @bind-Value="_city" />
+
+            <UiTextBox Label="State"
+                       Placeholder="State"
+                       Width="UiTextBox.FieldWidth.Third"
+                       @bind-Value="_state" />
+
+            <UiTextBox Label="Zip Code"
+                       Placeholder="00000"
+                       Width="UiTextBox.FieldWidth.Third"
+                       MaxLength="10"
+                       @bind-Value="_zip" />
+
+            @* Error state *@
+            <UiTextBox Label="With Error State"
+                       Placeholder="This field has an error"
+                       Width="UiTextBox.FieldWidth.Half"
+                       HasError="true"
+                       ErrorMessage="This field is required"
+                       @bind-Value="_errorField" />
+
+            @* Help text *@
+            <UiTextBox Label="With Help Text"
+                       Placeholder="Username"
+                       Width="UiTextBox.FieldWidth.Half"
+                       HelpText="Letters and numbers only, 3–20 characters"
+                       @bind-Value="_username" />
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 2 — Dropdowns
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Dropdowns"
+                Description="Single select with Full / Half / Third widths."
+                Icon="fa-solid fa-list">
+        <Fields>
+            <UiDropdown Label="Department"
+                        Placeholder="Select department…"
+                        Width="UiDropdown.FieldWidth.Full"
+                        Options="_deptOptions"
+                        Required="true"
+                        @bind-Value="_department"
+                        OnValueChanged="OnDeptChanged" />
+
+            <UiDropdown Label="Role"
+                        Placeholder="Select role…"
+                        Width="UiDropdown.FieldWidth.Half"
+                        Options="_roleOptions"
+                        @bind-Value="_role"
+                        OnValueChanged="OnRoleChanged" />
+
+            <UiDropdown Label="Status"
+                        Placeholder="Select status…"
+                        Width="UiDropdown.FieldWidth.Half"
+                        Options="_statusOptions"
+                        HelpText="Controls account access"
+                        @bind-Value="_status"
+                        OnValueChanged="OnStatusChanged" />
+
+            <UiDropdown Label="Country (Third)"
+                        Placeholder="Country…"
+                        Width="UiDropdown.FieldWidth.Third"
+                        Options="_countryOptions"
+                        @bind-Value="_country" />
+
+            <UiDropdown Label="Region (Third)"
+                        Placeholder="Region…"
+                        Width="UiDropdown.FieldWidth.Third"
+                        Options="_regionOptions"
+                        @bind-Value="_region" />
+
+            <UiDropdown Label="Timezone (Third)"
+                        Placeholder="Timezone…"
+                        Width="UiDropdown.FieldWidth.Third"
+                        Options="_timezoneOptions"
+                        HasError="@string.IsNullOrEmpty(_timezone)"
+                        ErrorMessage="Please select a timezone"
+                        @bind-Value="_timezone" />
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 3 — Multi-select dropdown
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Multi-Select Dropdown"
+                Description="Dropdown with checkboxes, search, and select all."
+                Icon="fa-solid fa-check-double">
+        <Fields>
+            <UiMultiDropdown Label="Skills (Full width)"
+                             Placeholder="Select skills…"
+                             Width="UiMultiDropdown.FieldWidth.Full"
+                             Options="_skillOptions"
+                             SelectedValues="_selectedSkills"
+                             OnSelectionChanged="HandleSkillsChanged"
+                             ShowSelectAll="true"
+                             Searchable="true" />
+
+            <UiMultiDropdown Label="Permissions (Half)"
+                             Placeholder="Select permissions…"
+                             Width="UiMultiDropdown.FieldWidth.Half"
+                             Options="_permOptions"
+                             SelectedValues="_selectedPerms"
+                             OnSelectionChanged="vals => _selectedPerms = vals" />
+
+            <UiMultiDropdown Label="Tags (Half)"
+                             Placeholder="Select tags…"
+                             Width="UiMultiDropdown.FieldWidth.Half"
+                             Options="_tagOptions"
+                             SelectedValues="_selectedTags"
+                             OnSelectionChanged="vals => _selectedTags = vals" />
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 4 — Radio buttons
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Radio Buttons"
+                Description="Horizontal and vertical layouts with optional descriptions."
+                Icon="fa-solid fa-circle-dot">
+        <Fields>
+            <UiRadioGroup Label="Priority (Horizontal)"
+                          Width="UiRadioGroup.FieldWidth.Full"
+                          Layout="UiRadioGroup.RadioLayout.Horizontal"
+                          Options="_priorityOptions"
+                          @bind-Value="_priority"
+                          OnValueChanged="OnPriorityChanged" />
+
+            <UiRadioGroup Label="Plan (Vertical with descriptions)"
+                          Width="UiRadioGroup.FieldWidth.Full"
+                          Layout="UiRadioGroup.RadioLayout.Vertical"
+                          Options="_planOptions"
+                          @bind-Value="_plan"
+                          OnValueChanged="OnPlanChanged" />
+
+            <UiRadioGroup Label="Notify (Half)"
+                          Width="UiRadioGroup.FieldWidth.Half"
+                          Layout="UiRadioGroup.RadioLayout.Horizontal"
+                          Options="_notifyOptions"
+                          @bind-Value="_notify" />
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 5 — File upload
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="File Upload"
+                Description="Drag-and-drop zone with file list, size validation, and remove."
+                Icon="fa-solid fa-cloud-arrow-up">
+        <Fields>
+            <UiFileUpload Label="Attachments (Full)"
+                          Width="UiFileUpload.FieldWidth.Full"
+                          Accept=".pdf,.docx,.xlsx,.png,.jpg"
+                          Multiple="true"
+                          MaxFileSizeMb="5"
+                          OnFilesChanged="HandleFilesChanged" />
+
+            <UiFileUpload Label="Profile Picture (Half)"
+                          Width="UiFileUpload.FieldWidth.Half"
+                          Accept=".png,.jpg,.jpeg,.webp"
+                          Multiple="false"
+                          MaxFileSizeMb="2"
+                          OnFilesChanged="OnAvatarChanged" />
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 6 — Buttons
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Buttons"
+                Description="Submit and Cancel buttons — all variants and loading state."
+                Icon="fa-solid fa-hand-pointer">
+        <Fields>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; width:100%;">
+                <UiSubmitButton Label="Primary"        Variant="UiSubmitButton.ButtonVariant.Primary"  OnClick="SimulateSubmit" IsSubmit="false" />
+                <UiSubmitButton Label="Teal"           Variant="UiSubmitButton.ButtonVariant.Teal"     OnClick="OnTealClick" IsSubmit="false" />
+                <UiSubmitButton Label="Danger"         Variant="UiSubmitButton.ButtonVariant.Danger"   OnClick="OnDangerClick" IsSubmit="false" />
+                <UiSubmitButton Label="Outline"        Variant="UiSubmitButton.ButtonVariant.Outline"  OnClick="OnOutlineClick" IsSubmit="false" />
+                <UiSubmitButton Label="Ghost"          Variant="UiSubmitButton.ButtonVariant.Ghost"    OnClick="OnGhostClick" IsSubmit="false" />
+                <UiSubmitButton Label="With Icon"      Icon="fa-solid fa-floppy-disk" OnClick="OnSaveClick" IsSubmit="false" />
+                <UiSubmitButton Label="Loading..."     Loading="@_simLoading" OnClick="SimulateSubmit" IsSubmit="false" LoadingLabel="Saving…" />
+                <UiCancelButton Label="Cancel"         OnClick="OnCancelClick" />
+                <UiCancelButton Label="Discard"        Icon="fa-solid fa-trash" OnClick="OnDiscardClick" />
+            </div>
+        </Fields>
+    </UiFormCard>
+
+    @* ══════════════════════════════════════════
+       Card 7 — Full sample form
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Sample Form — Submit to see collected data"
+                Description="All components together with action buttons."
+                Icon="fa-solid fa-file-pen">
+        <Fields>
+            <UiTextBox Label="Full Name"     Width="UiTextBox.FieldWidth.Half" Placeholder="Enter name"  Required="true" @bind-Value="_sampleName" />
+            <UiTextBox Label="Email"         Width="UiTextBox.FieldWidth.Half" Placeholder="Enter email" Type="email" @bind-Value="_sampleEmail" />
+            <UiDropdown Label="Department"   Width="UiDropdown.FieldWidth.Third" Options="_deptOptions" Placeholder="Select…" @bind-Value="_sampleDept" />
+            <UiDropdown Label="Role"         Width="UiDropdown.FieldWidth.Third" Options="_roleOptions"  Placeholder="Select…" @bind-Value="_sampleRole" />
+            <UiDropdown Label="Status"       Width="UiDropdown.FieldWidth.Third" Options="_statusOptions" Placeholder="Select…" @bind-Value="_sampleStatus" />
+            <UiRadioGroup Label="Priority"   Width="UiRadioGroup.FieldWidth.Full" Layout="UiRadioGroup.RadioLayout.Horizontal" Options="_priorityOptions" @bind-Value="_samplePriority" />
+            <UiFileUpload Label="Documents"  Width="UiFileUpload.FieldWidth.Full" Accept=".pdf,.docx" Multiple="true" MaxFileSizeMb="5" OnFilesChanged="f => _sampleFiles = f" />
+        </Fields>
+        <Actions>
+            <UiSubmitButton Label="Submit Form"
+                            Icon="fa-solid fa-paper-plane"
+                            Loading="@_formLoading"
+                            LoadingLabel="Submitting…"
+                            OnClick="HandleFormSubmit"
+                            IsSubmit="false" />
+            <UiCancelButton Label="Reset"
+                            Icon="fa-solid fa-rotate-left"
+                            OnClick="ResetForm" />
+        </Actions>
+    </UiFormCard>
+
+    @* ── Event log ── *@
+    @if (_log.Any())
+    {
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+                    padding:16px 20px; font-size:12px; font-family:monospace; max-height:180px; overflow-y:auto;">
+            <div style="font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+                        color:var(--txt-3); margin-bottom:8px;">Event Log</div>
+            @foreach (var entry in _log.AsEnumerable().Reverse())
+            {
+                <div style="color:var(--txt-2); padding:2px 0; border-bottom:1px solid var(--border);">
+                    <span style="color:var(--teal);">[@entry.Time]</span> @entry.Message
+                </div>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    // ── Event log ────────────────────────────────────────────────────────────
+    record LogEntry(string Time, string Message);
+    List<LogEntry> _log = [];
+    string _toast = string.Empty;
+    bool _simLoading = false;
+    bool _formLoading = false;
+
+    void Log(string msg) =>
+        _log.Add(new LogEntry(DateTime.Now.ToString("HH:mm:ss"), msg));
+
+    // ── Card 1: Text fields ───────────────────────────────────────────────────
+    string _fullName   = string.Empty;
+    string _email      = string.Empty;
+    string _phone      = string.Empty;
+    string _city       = string.Empty;
+    string _state      = string.Empty;
+    string _zip        = string.Empty;
+    string _errorField = string.Empty;
+    string _username   = string.Empty;
+
+    // ── Card 2: Dropdowns ─────────────────────────────────────────────────────
+    string _department = string.Empty;
+    string _role       = string.Empty;
+    string _status     = string.Empty;
+    string _country    = string.Empty;
+    string _region     = string.Empty;
+    string _timezone   = string.Empty;
+
+    List<UiDropdown.DropdownOption> _deptOptions =
+    [
+        new() { Value="engineering",  Label="Engineering"  },
+        new() { Value="design",       Label="Design"       },
+        new() { Value="hr",           Label="HR"           },
+        new() { Value="finance",      Label="Finance"      },
+        new() { Value="marketing",    Label="Marketing"    },
+    ];
+    List<UiDropdown.DropdownOption> _roleOptions =
+    [
+        new() { Value="admin",     Label="Admin"     },
+        new() { Value="editor",    Label="Editor"    },
+        new() { Value="developer", Label="Developer" },
+        new() { Value="viewer",    Label="Viewer"    },
+    ];
+    List<UiDropdown.DropdownOption> _statusOptions =
+    [
+        new() { Value="active",   Label="Active"   },
+        new() { Value="inactive", Label="Inactive" },
+        new() { Value="pending",  Label="Pending"  },
+    ];
+    List<UiDropdown.DropdownOption> _countryOptions =
+    [
+        new() { Value="us", Label="United States" },
+        new() { Value="uk", Label="United Kingdom" },
+        new() { Value="ca", Label="Canada" },
+        new() { Value="au", Label="Australia" },
+    ];
+    List<UiDropdown.DropdownOption> _regionOptions =
+    [
+        new() { Value="northeast", Label="Northeast" },
+        new() { Value="southeast", Label="Southeast" },
+        new() { Value="midwest",   Label="Midwest"   },
+        new() { Value="west",      Label="West"      },
+    ];
+    List<UiDropdown.DropdownOption> _timezoneOptions =
+    [
+        new() { Value="est",  Label="EST (UTC-5)" },
+        new() { Value="cst",  Label="CST (UTC-6)" },
+        new() { Value="mst",  Label="MST (UTC-7)" },
+        new() { Value="pst",  Label="PST (UTC-8)" },
+        new() { Value="utc",  Label="UTC"         },
+    ];
+
+    // ── Card 3: Multi-select ──────────────────────────────────────────────────
+    List<string> _selectedSkills = [];
+    List<string> _selectedPerms  = [];
+    List<string> _selectedTags   = [];
+
+    List<UiMultiDropdown.DropdownOption> _skillOptions =
+    [
+        new() { Value="blazor",   Label="Blazor"     },
+        new() { Value="dotnet",   Label=".NET Core"  },
+        new() { Value="azure",    Label="Azure"      },
+        new() { Value="react",    Label="React"      },
+        new() { Value="sql",      Label="SQL Server" },
+        new() { Value="docker",   Label="Docker"     },
+    ];
+    List<UiMultiDropdown.DropdownOption> _permOptions =
+    [
+        new() { Value="read",   Label="Read"   },
+        new() { Value="write",  Label="Write"  },
+        new() { Value="delete", Label="Delete" },
+        new() { Value="admin",  Label="Admin"  },
+    ];
+    List<UiMultiDropdown.DropdownOption> _tagOptions =
+    [
+        new() { Value="urgent",   Label="Urgent"   },
+        new() { Value="review",   Label="Review"   },
+        new() { Value="approved", Label="Approved" },
+        new() { Value="draft",    Label="Draft"    },
+    ];
+
+    void HandleSkillsChanged(List<string> vals)
+    {
+        _selectedSkills = vals;
+        Log($"Skills: {string.Join(", ", vals)}");
+    }
+
+    // ── Card 4: Radio ─────────────────────────────────────────────────────────
+    string _priority = "medium";
+    string _plan     = "pro";
+    string _notify   = "email";
+
+    List<UiRadioGroup.RadioOption> _priorityOptions =
+    [
+        new() { Value="low",    Label="Low"    },
+        new() { Value="medium", Label="Medium" },
+        new() { Value="high",   Label="High"   },
+        new() { Value="urgent", Label="Urgent" },
+    ];
+    List<UiRadioGroup.RadioOption> _planOptions =
+    [
+        new() { Value="free",  Label="Free",       Description="Up to 3 users, basic features" },
+        new() { Value="pro",   Label="Pro",         Description="Up to 25 users, advanced features" },
+        new() { Value="enterprise", Label="Enterprise", Description="Unlimited users, custom SLA" },
+    ];
+    List<UiRadioGroup.RadioOption> _notifyOptions =
+    [
+        new() { Value="email", Label="Email" },
+        new() { Value="sms",   Label="SMS"   },
+        new() { Value="none",  Label="None"  },
+    ];
+
+    // ── Card 5: File upload ───────────────────────────────────────────────────
+    List<UiFileUpload.UploadedFile> _uploadedFiles = [];
+    void HandleFilesChanged(List<UiFileUpload.UploadedFile> files)
+    {
+        _uploadedFiles = files;
+        Log($"Files: {string.Join(", ", files.Select(f => f.Name))}");
+    }
+
+    // ── Card 6: Buttons ───────────────────────────────────────────────────────
+    async Task SimulateSubmit()
+    {
+        _simLoading = true;
+        await Task.Delay(2000);
+        _simLoading = false;
+        Log("Simulated submit complete");
+    }
+
+    // ── Card 7: Sample form ───────────────────────────────────────────────────
+    string _sampleName     = string.Empty;
+    string _sampleEmail    = string.Empty;
+    string _sampleDept     = string.Empty;
+    string _sampleRole     = string.Empty;
+    string _sampleStatus   = string.Empty;
+    string _samplePriority = "medium";
+    List<UiFileUpload.UploadedFile> _sampleFiles = [];
+
+    async Task HandleFormSubmit()
+    {
+        _formLoading = true;
+        await Task.Delay(1500);
+        _formLoading = false;
+        _toast = $"Form submitted! Name: {_sampleName}, Email: {_sampleEmail}, Dept: {_sampleDept}";
+        Log($"Form submitted — Name={_sampleName} Email={_sampleEmail} Dept={_sampleDept} Role={_sampleRole} Priority={_samplePriority} Files={_sampleFiles.Count}");
+    }
+
+    // Named handlers (avoid " inside attribute strings — Razor limitation)
+    void OnFullNameChanged(string v)  => Log("Full Name: " + v);
+    void OnEmailChanged(string v)     => Log("Email: " + v);
+    void OnPhoneChanged(string v)     => Log("Phone: " + v);
+    void OnDeptChanged(string v)      => Log("Department: " + v);
+    void OnRoleChanged(string v)      => Log("Role: " + v);
+    void OnStatusChanged(string v)    => Log("Status: " + v);
+    void OnPriorityChanged(string v)  => Log("Priority: " + v);
+    void OnPlanChanged(string v)      => Log("Plan: " + v);
+    void OnAvatarChanged(List<UiFileUpload.UploadedFile> files) =>
+        Log("Avatar: " + (files.FirstOrDefault()?.Name ?? "none"));
+
+    // Button click handlers (avoid " inside attribute strings — Razor limitation)
+    void OnTealClick()    => Log("Teal clicked");
+    void OnDangerClick()  => Log("Danger clicked");
+    void OnOutlineClick() => Log("Outline clicked");
+    void OnGhostClick()   => Log("Ghost clicked");
+    void OnSaveClick()    => Log("Save clicked");
+    void OnCancelClick()  => Log("Cancel clicked");
+    void OnDiscardClick() => Log("Discard clicked");
+
+    void ResetForm()
+    {
+        _sampleName = _sampleEmail = _sampleDept = _sampleRole = _sampleStatus = string.Empty;
+        _samplePriority = "medium";
+        _sampleFiles = [];
+        Log("Form reset");
+    }
+}

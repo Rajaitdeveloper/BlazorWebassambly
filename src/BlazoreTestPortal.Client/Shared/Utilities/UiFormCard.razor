@@ -1,0 +1,92 @@
+@* Shared/Utilities/UiFormCard.razor *@
+@* Card wrapper for form sections. Provides consistent padding, title, and field row layout.
+   Usage:
+     <UiFormCard Title="Personal Info" Icon="fa-solid fa-user">
+         <Fields>
+             <UiTextBox Label="First Name" Width="UiTextBox.FieldWidth.Half" ... />
+             <UiTextBox Label="Last Name"  Width="UiTextBox.FieldWidth.Half" ... />
+         </Fields>
+     </UiFormCard>
+*@
+
+<div class="ufc-card">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="ufc-header">
+            @if (!string.IsNullOrEmpty(Icon))
+            {
+                <span class="ufc-icon"><i class="@Icon"></i></span>
+            }
+            <div>
+                <h3 class="ufc-title">@Title</h3>
+                @if (!string.IsNullOrEmpty(Description))
+                {
+                    <p class="ufc-desc">@Description</p>
+                }
+            </div>
+        </div>
+    }
+    <div class="ufc-fields">
+        @Fields
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="ufc-actions">
+            @Actions
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string         Title       { get; set; } = string.Empty;
+    [Parameter] public string         Description { get; set; } = string.Empty;
+    [Parameter] public string         Icon        { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? Fields     { get; set; }
+    [Parameter] public RenderFragment? Actions    { get; set; }
+}
+
+<style>
+    .ufc-card {
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius-lg, 14px);
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    }
+
+    .ufc-header {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 18px 24px 16px;
+        border-bottom: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+    }
+    .ufc-icon {
+        width: 34px; height: 34px; flex-shrink: 0;
+        border-radius: var(--radius, 8px);
+        background: var(--accent-faint, rgba(200,23,102,.12));
+        color: var(--accent, #c81766);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; margin-top: 1px;
+    }
+    .ufc-title { font-size: 14.5px; font-weight: 700; color: var(--txt, #1e293b); margin: 0 0 2px; }
+    .ufc-desc  { font-size: 12px; color: var(--txt-3, #94a3b8); margin: 0; line-height: 1.5; }
+
+    /* Field row — wraps with gap so Half and Third fields sit side by side */
+    .ufc-fields {
+        display: flex; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px;
+    }
+
+    .ufc-actions {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        padding: 14px 24px 18px;
+        border-top: 1px solid var(--border, #e2e8f0);
+        background: var(--surface-2, #f7f9fc);
+    }
+
+    @@media (max-width: 640px) {
+        .ufc-header { padding: 14px 16px 12px; }
+        .ufc-fields { padding: 16px; gap: 12px; }
+        .ufc-actions { padding: 12px 16px 14px; }
+    }
+</style>

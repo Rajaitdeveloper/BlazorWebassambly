@@ -1,0 +1,58 @@
+@* Shared/Utilities/UiCancelButton.razor *@
+@* Cancel / secondary action button.
+   Usage:
+     <UiCancelButton Label="Discard"
+                     OnClick="HandleCancel"
+                     NavigateTo="/dashboard" />
+*@
+
+@inject NavigationManager Nav
+
+<button type="button"
+        class="ucb-btn @(FullWidth ? "ucb-full" : "")"
+        disabled="@Disabled"
+        @onclick="HandleClick">
+    @if (!string.IsNullOrEmpty(Icon))
+    {
+        <i class="@Icon"></i>
+    }
+    <span>@Label</span>
+</button>
+
+@code {
+    [Parameter] public string        Label      { get; set; } = "Cancel";
+    [Parameter] public string        Icon       { get; set; } = string.Empty;
+    [Parameter] public bool          Disabled   { get; set; } = false;
+    [Parameter] public bool          FullWidth  { get; set; } = false;
+    [Parameter] public string?       NavigateTo { get; set; }
+    [Parameter] public EventCallback OnClick    { get; set; }
+
+    async Task HandleClick()
+    {
+        await OnClick.InvokeAsync();
+        if (!string.IsNullOrEmpty(NavigateTo))
+            Nav.NavigateTo(NavigateTo);
+    }
+}
+
+<style>
+    .ucb-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 9px 20px; border-radius: var(--radius, 8px);
+        font-size: 13.5px; font-weight: 600; cursor: pointer;
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+        background: var(--surface-2, #f7f9fc);
+        color: var(--txt-2, #475569);
+        border: 1.5px solid var(--border, #e2e8f0);
+        transition: background .15s, border-color .15s, color .15s, transform .1s;
+        white-space: nowrap;
+    }
+    .ucb-btn:hover:not(:disabled) {
+        background: var(--surface, #fff);
+        border-color: var(--border-2, #cbd5e1);
+        color: var(--txt, #1e293b);
+    }
+    .ucb-btn:active:not(:disabled) { transform: scale(.98); }
+    .ucb-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .ucb-full { width: 100%; justify-content: center; }
+</style>

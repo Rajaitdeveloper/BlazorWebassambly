@@ -1,0 +1,248 @@
+@* Shared/Utilities/UiFileUpload.razor *@
+@* File upload with drag-drop zone, file list, and remove.
+   Usage:
+     <UiFileUpload Label="Attachments"
+                   Width="FieldWidth.Full"
+                   Accept=".pdf,.docx,.xlsx"
+                   Multiple="true"
+                   MaxFileSizeMb="10"
+                   OnFilesChanged="HandleFiles" />
+*@
+
+@inject IJSRuntime JS
+
+<div class="ufu-wrap @WidthClass">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="ufu-label">
+            @Label
+            @if (Required) { <span class="ufu-required">*</span> }
+        </label>
+    }
+
+    <div class="ufu-zone @(_dragging ? "ufu-dragging" : "") @(HasError ? "ufu-has-error" : "") @(Disabled ? "ufu-disabled" : "")"
+         @ondragover:preventDefault
+         @ondragover="() => _dragging = true"
+         @ondragleave="() => _dragging = false"
+         @ondrop:preventDefault
+         @ondrop="() => _dragging = false">
+        <InputFile class="ufu-input"
+                   id="@_id"
+                   accept="@Accept"
+                   multiple="@Multiple"
+                   disabled="@Disabled"
+                   OnChange="HandleInputChange" />
+        <label for="@_id" class="ufu-zone-inner">
+            <span class="ufu-icon"><i class="fa-solid fa-cloud-arrow-up"></i></span>
+            <span class="ufu-zone-title">Drag &amp; drop files here</span>
+            <span class="ufu-zone-sub">
+                or <span class="ufu-browse">browse files</span>
+                @if (!string.IsNullOrEmpty(Accept))
+                {
+                    <span> · @Accept</span>
+                }
+                @if (MaxFileSizeMb > 0)
+                {
+                    <span> · Max @MaxFileSizeMb MB</span>
+                }
+            </span>
+        </label>
+    </div>
+
+    @if (_files.Any())
+    {
+        <div class="ufu-file-list">
+            @foreach (var file in _files)
+            {
+                <div class="ufu-file-item @(file.Error ? "ufu-file-error" : "")">
+                    <span class="ufu-file-icon"><i class="fa-solid @FileIcon(file.Name)"></i></span>
+                    <div class="ufu-file-info">
+                        <span class="ufu-file-name">@file.Name</span>
+                        <span class="ufu-file-size">@FormatSize(file.Size)</span>
+                        @if (file.Error)
+                        {
+                            <span class="ufu-file-err-msg">@file.ErrorMessage</span>
+                        }
+                    </div>
+                    @if (!file.Error)
+                    {
+                        <span class="ufu-file-ok"><i class="fa-solid fa-circle-check"></i></span>
+                    }
+                    <button type="button" class="ufu-file-remove" @onclick="() => RemoveFile(file)">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+    {
+        <span class="ufu-error-msg"><i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage</span>
+    }
+    @if (!string.IsNullOrEmpty(HelpText) && !HasError)
+    {
+        <span class="ufu-help">@HelpText</span>
+    }
+</div>
+
+@code {
+    public enum FieldWidth { Full, Half, Third }
+
+    public sealed class UploadedFile
+    {
+        public required string Name         { get; init; }
+        public required long   Size         { get; init; }
+        public          bool   Error        { get; set; } = false;
+        public          string ErrorMessage { get; set; } = string.Empty;
+        public required IBrowserFile BrowserFile { get; init; }
+    }
+
+    [Parameter] public string       Label        { get; set; } = string.Empty;
+    [Parameter] public FieldWidth   Width        { get; set; } = FieldWidth.Full;
+    [Parameter] public string       Accept       { get; set; } = string.Empty;
+    [Parameter] public bool         Multiple     { get; set; } = false;
+    [Parameter] public int          MaxFileSizeMb { get; set; } = 10;
+    [Parameter] public bool         Required     { get; set; } = false;
+    [Parameter] public bool         Disabled     { get; set; } = false;
+    [Parameter] public bool         HasError     { get; set; } = false;
+    [Parameter] public string       ErrorMessage { get; set; } = string.Empty;
+    [Parameter] public string       HelpText     { get; set; } = string.Empty;
+    [Parameter] public EventCallback<List<UploadedFile>> OnFilesChanged { get; set; }
+
+    readonly string       _id       = $"ufu-{Guid.NewGuid():N}";
+    bool                  _dragging = false;
+    List<UploadedFile>    _files    = [];
+
+    string WidthClass => Width switch
+    {
+        FieldWidth.Half  => "ufu-half",
+        FieldWidth.Third => "ufu-third",
+        _                => "ufu-full",
+    };
+
+    async Task HandleInputChange(InputFileChangeEventArgs e)
+    {
+        _dragging = false;
+        await AddFiles(e.GetMultipleFiles(20));
+    }
+
+    async Task AddFiles(IReadOnlyList<IBrowserFile> incoming)
+    {
+        foreach (var file in incoming)
+        {
+            var entry = new UploadedFile
+            {
+                Name        = file.Name,
+                Size        = file.Size,
+                BrowserFile = file,
+            };
+
+            if (MaxFileSizeMb > 0 && file.Size > MaxFileSizeMb * 1024 * 1024)
+            {
+                entry.Error        = true;
+                entry.ErrorMessage = $"File exceeds {MaxFileSizeMb} MB limit";
+            }
+
+            if (!Multiple) _files.Clear();
+            _files.Add(entry);
+        }
+        await OnFilesChanged.InvokeAsync([.._files]);
+    }
+
+    async Task RemoveFile(UploadedFile file)
+    {
+        _files.Remove(file);
+        await OnFilesChanged.InvokeAsync([.._files]);
+    }
+
+    static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)                 return $"{bytes} B";
+        if (bytes < 1024 * 1024)          return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024L * 1024 * 1024)  return $"{bytes / (1024.0 * 1024):F1} MB";
+        return $"{bytes / (1024.0 * 1024 * 1024):F1} GB";
+    }
+
+    string FileIcon(string name)
+    {
+        var ext = System.IO.Path.GetExtension(name).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf"              => "fa-file-pdf",
+            ".doc" or ".docx"   => "fa-file-word",
+            ".xls" or ".xlsx"   => "fa-file-excel",
+            ".ppt" or ".pptx"   => "fa-file-powerpoint",
+            ".jpg" or ".jpeg"
+                or ".png"
+                or ".gif"
+                or ".webp"      => "fa-file-image",
+            ".zip" or ".rar"
+                or ".7z"        => "fa-file-zipper",
+            ".mp4" or ".mov"
+                or ".avi"       => "fa-file-video",
+            ".mp3" or ".wav"    => "fa-file-audio",
+            ".txt"              => "fa-file-lines",
+            _                   => "fa-file",
+        };
+    }
+}
+
+<style>
+    .ufu-wrap  { display: flex; flex-direction: column; gap: 6px; }
+    .ufu-full  { width: 100%; }
+    .ufu-half  { width: calc(50% - 8px); }
+    .ufu-third { width: calc(33.333% - 11px); }
+
+    .ufu-label    { font-size: 12.5px; font-weight: 600; color: var(--txt-2, #475569); letter-spacing: .1px; }
+    .ufu-required { color: var(--accent, #c81766); margin-left: 2px; }
+
+    .ufu-zone {
+        border: 2px dashed var(--border, #e2e8f0);
+        border-radius: var(--radius-lg, 14px);
+        background: var(--surface-2, #f7f9fc);
+        transition: border-color .15s, background .15s;
+        position: relative; overflow: hidden;
+    }
+    .ufu-zone:hover:not(.ufu-disabled) { border-color: var(--accent, #c81766); background: var(--accent-faint, rgba(200,23,102,.04)); }
+    .ufu-zone.ufu-dragging { border-color: var(--accent, #c81766); background: var(--accent-faint, rgba(200,23,102,.08)); }
+    .ufu-zone.ufu-has-error { border-color: #e11d48; }
+    .ufu-zone.ufu-disabled  { opacity: .5; pointer-events: none; }
+
+    .ufu-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+    .ufu-zone-inner {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; padding: 32px 20px; cursor: pointer; pointer-events: none;
+    }
+    .ufu-icon { font-size: 28px; color: var(--accent, #c81766); opacity: .7; }
+    .ufu-zone-title { font-size: 14px; font-weight: 600; color: var(--txt, #1e293b); }
+    .ufu-zone-sub   { font-size: 12px; color: var(--txt-3, #94a3b8); text-align: center; }
+    .ufu-browse     { color: var(--accent, #c81766); font-weight: 600; }
+
+    .ufu-file-list  { display: flex; flex-direction: column; gap: 6px; }
+    .ufu-file-item  {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 12px; border-radius: var(--radius, 8px);
+        border: 1px solid var(--border, #e2e8f0); background: var(--surface, #fff);
+    }
+    .ufu-file-item.ufu-file-error { border-color: #fecaca; background: #fff5f5; }
+
+    .ufu-file-icon  { font-size: 18px; color: var(--accent, #c81766); flex-shrink: 0; }
+    .ufu-file-info  { flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+    .ufu-file-name  { font-size: 13px; font-weight: 600; color: var(--txt, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ufu-file-size  { font-size: 11.5px; color: var(--txt-3, #94a3b8); }
+    .ufu-file-err-msg { font-size: 11.5px; color: #e11d48; }
+    .ufu-file-ok    { color: var(--teal, #04595a); font-size: 15px; flex-shrink: 0; }
+    .ufu-file-remove {
+        background: none; border: none; cursor: pointer; padding: 3px 6px;
+        color: var(--txt-3, #94a3b8); font-size: 12px; border-radius: 4px;
+        flex-shrink: 0; transition: color .12s, background .12s;
+    }
+    .ufu-file-remove:hover { color: #e11d48; background: #fff5f5; }
+
+    .ufu-error-msg { font-size: 11.5px; color: #e11d48; display: flex; align-items: center; gap: 4px; }
+    .ufu-help      { font-size: 11.5px; color: var(--txt-3, #94a3b8); line-height: 1.4; }
+
+    @@media (max-width: 640px) { .ufu-half, .ufu-third { width: 100%; } }
+</style>

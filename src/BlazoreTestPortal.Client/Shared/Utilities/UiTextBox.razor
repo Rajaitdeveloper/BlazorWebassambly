@@ -1,0 +1,146 @@
+@* Shared/Utilities/UiTextBox.razor *@
+@* A styled text input field.
+   Width options: Full | Half | Third
+   Usage:
+     <UiTextBox Label="First Name"
+                Placeholder="Enter first name"
+                Width="FieldWidth.Half"
+                @bind-Value="_firstName"
+                OnValueChanged="v => _firstName = v" />
+*@
+
+<div class="utb-wrap @WidthClass">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="utb-label" for="@_id">
+            @Label
+            @if (Required) { <span class="utb-required">*</span> }
+        </label>
+    }
+    <div class="utb-input-wrap @(HasError ? "utb-has-error" : "")">
+        @if (!string.IsNullOrEmpty(LeadIcon))
+        {
+            <span class="utb-lead-icon"><i class="@LeadIcon"></i></span>
+        }
+        <input id="@_id"
+               class="utb-input @(!string.IsNullOrEmpty(LeadIcon) ? "utb-has-lead" : "")"
+               type="@Type"
+               placeholder="@Placeholder"
+               value="@Value"
+               disabled="@Disabled"
+               readonly="@Readonly"
+               maxlength="@(MaxLength > 0 ? MaxLength.ToString() : null)"
+               @oninput="OnInput"
+               @onblur="OnBlur" />
+    </div>
+    @if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+    {
+        <span class="utb-error-msg"><i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage</span>
+    }
+    @if (!string.IsNullOrEmpty(HelpText) && !HasError)
+    {
+        <span class="utb-help">@HelpText</span>
+    }
+</div>
+
+@code {
+    public enum FieldWidth { Full, Half, Third }
+
+    [Parameter] public string        Label        { get; set; } = string.Empty;
+    [Parameter] public string        Placeholder  { get; set; } = string.Empty;
+    [Parameter] public string        Value        { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged  { get; set; }
+    [Parameter] public EventCallback<string> OnValueChanged { get; set; }
+    [Parameter] public FieldWidth    Width        { get; set; } = FieldWidth.Full;
+    [Parameter] public string        Type         { get; set; } = "text";
+    [Parameter] public bool          Required     { get; set; } = false;
+    [Parameter] public bool          Disabled     { get; set; } = false;
+    [Parameter] public bool          Readonly     { get; set; } = false;
+    [Parameter] public string        LeadIcon     { get; set; } = string.Empty;
+    [Parameter] public string        HelpText     { get; set; } = string.Empty;
+    [Parameter] public bool          HasError     { get; set; } = false;
+    [Parameter] public string        ErrorMessage { get; set; } = string.Empty;
+    [Parameter] public int           MaxLength    { get; set; } = 0;
+
+    readonly string _id = $"utb-{Guid.NewGuid():N}";
+
+    string WidthClass => Width switch
+    {
+        FieldWidth.Half  => "utb-half",
+        FieldWidth.Third => "utb-third",
+        _                => "utb-full",
+    };
+
+    async Task OnInput(ChangeEventArgs e)
+    {
+        var v = e.Value?.ToString() ?? string.Empty;
+        await ValueChanged.InvokeAsync(v);
+        await OnValueChanged.InvokeAsync(v);
+    }
+
+    async Task OnBlur(FocusEventArgs _)
+    {
+        await OnValueChanged.InvokeAsync(Value);
+    }
+}
+
+<style>
+    .utb-wrap { display: flex; flex-direction: column; gap: 5px; }
+
+    /* Width variants */
+    .utb-full  { width: 100%; }
+    .utb-half  { width: calc(50% - 8px); }
+    .utb-third { width: calc(33.333% - 11px); }
+
+    .utb-label {
+        font-size: 12.5px; font-weight: 600;
+        color: var(--txt-2, #475569);
+        letter-spacing: .1px;
+    }
+    .utb-required { color: var(--accent, #c81766); margin-left: 2px; }
+
+    .utb-input-wrap {
+        position: relative; display: flex; align-items: center;
+        border: 1.5px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px);
+        background: var(--surface, #fff);
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .utb-input-wrap:focus-within {
+        border-color: var(--accent, #c81766);
+        box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
+    }
+    .utb-input-wrap.utb-has-error {
+        border-color: #e11d48;
+        box-shadow: 0 0 0 3px rgba(225,29,72,.10);
+    }
+
+    .utb-lead-icon {
+        display: flex; align-items: center; justify-content: center;
+        width: 36px; flex-shrink: 0;
+        color: var(--txt-3, #94a3b8); font-size: 13px;
+    }
+
+    .utb-input {
+        width: 100%; padding: 9px 12px;
+        border: none; outline: none; background: transparent;
+        font-size: 13.5px; color: var(--txt, #1e293b);
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+        border-radius: var(--radius, 8px);
+    }
+    .utb-input.utb-has-lead { padding-left: 4px; }
+    .utb-input::placeholder   { color: var(--txt-3, #94a3b8); }
+    .utb-input:disabled       { opacity: .55; cursor: not-allowed; }
+
+    .utb-error-msg {
+        font-size: 11.5px; color: #e11d48;
+        display: flex; align-items: center; gap: 4px;
+    }
+    .utb-help {
+        font-size: 11.5px; color: var(--txt-3, #94a3b8); line-height: 1.4;
+    }
+
+    @@media (max-width: 640px) {
+        .utb-half, .utb-third { width: 100%; }
+    }
+</style>

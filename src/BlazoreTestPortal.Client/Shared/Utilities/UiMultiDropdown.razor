@@ -1,0 +1,290 @@
+@* Shared/Utilities/UiMultiDropdown.razor *@
+@* Dropdown with checkboxes — multi-select.
+   Usage:
+     <UiMultiDropdown Label="Skills"
+                      Width="FieldWidth.Half"
+                      Options="_skillOptions"
+                      SelectedValues="_selectedSkills"
+                      OnSelectionChanged="vals => _selectedSkills = vals" />
+*@
+
+@implements IDisposable
+@inject IJSRuntime JS
+
+<div class="umd-wrap @WidthClass" @ref="_rootRef">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="umd-label">
+            @Label
+            @if (Required) { <span class="umd-required">*</span> }
+        </label>
+    }
+
+    <div class="umd-trigger-wrap @(HasError ? "umd-has-error" : "") @(Disabled ? "umd-disabled" : "")">
+        <button type="button"
+                class="umd-trigger"
+                disabled="@Disabled"
+                @onclick="ToggleOpen">
+            <span class="umd-trigger-text">
+                @if (_selected.Count == 0)
+                {
+                    <span class="umd-placeholder">@Placeholder</span>
+                }
+                else if (_selected.Count == 1)
+                {
+                    @(Options.FirstOrDefault(o => o.Value == _selected[0])?.Label ?? _selected[0])
+                }
+                else
+                {
+                    @($"{_selected.Count} selected")
+                }
+            </span>
+            <span class="umd-chips-count @(_selected.Count > 0 ? "visible" : "")">@_selected.Count</span>
+            <span class="umd-arrow @(_open ? "open" : "")"><i class="fa-solid fa-chevron-down"></i></span>
+        </button>
+
+        @if (_open)
+        {
+            <div class="umd-panel">
+                @if (Searchable)
+                {
+                    <div class="umd-search-row">
+                        <i class="fa-solid fa-magnifying-glass umd-search-icon"></i>
+                        <input class="umd-search" type="text" placeholder="Search…"
+                               @bind="_searchTerm" @bind:event="oninput" />
+                    </div>
+                }
+
+                @if (ShowSelectAll)
+                {
+                    <label class="umd-option umd-select-all">
+                        <input type="checkbox"
+                               checked="@(_selected.Count == Options.Count)"
+                               @onchange="ToggleAll" />
+                        <span class="umd-check"></span>
+                        <span class="umd-option-label">Select all</span>
+                    </label>
+                    <div class="umd-divider"></div>
+                }
+
+                @foreach (var opt in FilteredOptions)
+                {
+                    <label class="umd-option">
+                        <input type="checkbox"
+                               checked="@_selected.Contains(opt.Value)"
+                               @onchange="e => ToggleOption(opt.Value, e)" />
+                        <span class="umd-check"></span>
+                        <span class="umd-option-label">@opt.Label</span>
+                    </label>
+                }
+
+                @if (!FilteredOptions.Any())
+                {
+                    <div class="umd-empty">No options match</div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_selected.Count > 0)
+    {
+        <div class="umd-tags">
+            @foreach (var val in _selected)
+            {
+                var label = Options.FirstOrDefault(o => o.Value == val)?.Label ?? val;
+                <span class="umd-tag">
+                    @label
+                    <button type="button" class="umd-tag-remove" @onclick="() => RemoveTag(val)">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </span>
+            }
+        </div>
+    }
+
+    @if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+    {
+        <span class="umd-error-msg"><i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage</span>
+    }
+    @if (!string.IsNullOrEmpty(HelpText) && !HasError)
+    {
+        <span class="umd-help">@HelpText</span>
+    }
+</div>
+
+@code {
+    public enum FieldWidth { Full, Half, Third }
+
+    public sealed class DropdownOption
+    {
+        public required string Value { get; init; }
+        public required string Label { get; init; }
+    }
+
+    [Parameter] public string       Label           { get; set; } = string.Empty;
+    [Parameter] public string       Placeholder     { get; set; } = "Select options…";
+    [Parameter] public FieldWidth   Width           { get; set; } = FieldWidth.Full;
+    [Parameter] public List<DropdownOption> Options { get; set; } = [];
+    [Parameter] public List<string> SelectedValues  { get; set; } = [];
+    [Parameter] public EventCallback<List<string>> OnSelectionChanged { get; set; }
+    [Parameter] public bool         Required        { get; set; } = false;
+    [Parameter] public bool         Disabled        { get; set; } = false;
+    [Parameter] public bool         Searchable      { get; set; } = true;
+    [Parameter] public bool         ShowSelectAll   { get; set; } = true;
+    [Parameter] public bool         HasError        { get; set; } = false;
+    [Parameter] public string       ErrorMessage    { get; set; } = string.Empty;
+    [Parameter] public string       HelpText        { get; set; } = string.Empty;
+
+    bool          _open       = false;
+    string        _searchTerm = string.Empty;
+    List<string>  _selected   = [];
+    ElementReference _rootRef;
+
+    protected override void OnParametersSet()
+    {
+        _selected = [..SelectedValues];
+    }
+
+    IEnumerable<DropdownOption> FilteredOptions => string.IsNullOrWhiteSpace(_searchTerm)
+        ? Options
+        : Options.Where(o => o.Label.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    string WidthClass => Width switch
+    {
+        FieldWidth.Half  => "umd-half",
+        FieldWidth.Third => "umd-third",
+        _                => "umd-full",
+    };
+
+    void ToggleOpen() { if (!Disabled) _open = !_open; }
+
+    async Task ToggleOption(string value, ChangeEventArgs e)
+    {
+        if ((bool)(e.Value ?? false)) { if (!_selected.Contains(value)) _selected.Add(value); }
+        else _selected.Remove(value);
+        await OnSelectionChanged.InvokeAsync([.._selected]);
+    }
+
+    async Task ToggleAll(ChangeEventArgs e)
+    {
+        _selected = (bool)(e.Value ?? false)
+            ? Options.Select(o => o.Value).ToList()
+            : [];
+        await OnSelectionChanged.InvokeAsync([.._selected]);
+    }
+
+    async Task RemoveTag(string value)
+    {
+        _selected.Remove(value);
+        await OnSelectionChanged.InvokeAsync([.._selected]);
+    }
+
+    public void Dispose() { }
+}
+
+<style>
+    .umd-wrap  { display: flex; flex-direction: column; gap: 5px; position: relative; }
+    .umd-full  { width: 100%; }
+    .umd-half  { width: calc(50% - 8px); }
+    .umd-third { width: calc(33.333% - 11px); }
+
+    .umd-label    { font-size: 12.5px; font-weight: 600; color: var(--txt-2, #475569); letter-spacing: .1px; }
+    .umd-required { color: var(--accent, #c81766); margin-left: 2px; }
+
+    .umd-trigger-wrap {
+        border: 1.5px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px);
+        background: var(--surface, #fff);
+        transition: border-color .15s, box-shadow .15s;
+        position: relative;
+    }
+    .umd-trigger-wrap:focus-within {
+        border-color: var(--accent, #c81766);
+        box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
+    }
+    .umd-trigger-wrap.umd-has-error { border-color: #e11d48; box-shadow: 0 0 0 3px rgba(225,29,72,.10); }
+    .umd-trigger-wrap.umd-disabled  { opacity: .55; pointer-events: none; }
+
+    .umd-trigger {
+        width: 100%; padding: 9px 12px; display: flex; align-items: center; gap: 8px;
+        background: transparent; border: none; cursor: pointer; text-align: left;
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    }
+    .umd-trigger-text { flex: 1; font-size: 13.5px; color: var(--txt, #1e293b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .umd-placeholder  { color: var(--txt-3, #94a3b8); }
+
+    .umd-chips-count {
+        display: none; background: var(--accent, #c81766); color: #fff;
+        font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+    }
+    .umd-chips-count.visible { display: inline-block; }
+
+    .umd-arrow { color: var(--txt-3, #94a3b8); font-size: 11px; transition: transform .15s; flex-shrink: 0; }
+    .umd-arrow.open { transform: rotate(180deg); color: var(--accent, #c81766); }
+
+    .umd-panel {
+        position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+        background: var(--surface, #fff); border: 1.5px solid var(--border, #e2e8f0);
+        border-radius: var(--radius, 8px); box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        z-index: 9999; max-height: 260px; overflow-y: auto; padding: 6px 0;
+    }
+
+    .umd-search-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 12px; border-bottom: 1px solid var(--border, #e2e8f0); margin-bottom: 4px;
+    }
+    .umd-search-icon { font-size: 12px; color: var(--txt-3, #94a3b8); }
+    .umd-search {
+        flex: 1; border: none; outline: none; background: transparent;
+        font-size: 13px; color: var(--txt, #1e293b);
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    }
+
+    .umd-divider { height: 1px; background: var(--border, #e2e8f0); margin: 4px 0; }
+
+    .umd-option {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 14px; cursor: pointer; font-size: 13.5px; color: var(--txt, #1e293b);
+        transition: background .1s;
+    }
+    .umd-option:hover      { background: var(--surface-2, #f7f9fc); }
+    .umd-select-all        { font-weight: 600; color: var(--txt-2, #475569); }
+    .umd-option input[type="checkbox"] { display: none; }
+
+    .umd-check {
+        width: 16px; height: 16px; flex-shrink: 0; border-radius: 4px;
+        border: 1.5px solid var(--border-2, #cbd5e1); background: var(--surface, #fff);
+        display: flex; align-items: center; justify-content: center;
+        transition: border-color .15s, background .15s;
+    }
+    .umd-option input:checked + .umd-check {
+        background: var(--accent, #c81766); border-color: var(--accent, #c81766);
+    }
+    .umd-option input:checked + .umd-check::after {
+        content: ''; width: 9px; height: 5px;
+        border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+        transform: rotate(-45deg) translateY(-1px);
+    }
+    .umd-option-label { flex: 1; }
+    .umd-empty { padding: 12px 14px; font-size: 13px; color: var(--txt-3, #94a3b8); text-align: center; }
+
+    .umd-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .umd-tag {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: var(--accent-faint, rgba(200,23,102,.12));
+        color: var(--accent, #c81766);
+        font-size: 12px; font-weight: 600;
+        padding: 3px 8px; border-radius: 20px;
+    }
+    .umd-tag-remove {
+        background: none; border: none; cursor: pointer; padding: 0;
+        color: var(--accent, #c81766); font-size: 10px; line-height: 1;
+        display: flex; align-items: center;
+    }
+    .umd-tag-remove:hover { color: var(--accent-hover, #a81257); }
+
+    .umd-error-msg { font-size: 11.5px; color: #e11d48; display: flex; align-items: center; gap: 4px; }
+    .umd-help      { font-size: 11.5px; color: var(--txt-3, #94a3b8); line-height: 1.4; }
+
+    @@media (max-width: 640px) { .umd-half, .umd-third { width: 100%; } }
+</style>
