@@ -1,0 +1,184 @@
+@* Shared/Utilities/UiStatusAlert.razor *@
+@* Displays success, error, warning, or info status messages.
+   Supports dismissible, icon, title, and auto-dismiss.
+
+   USAGE:
+     <UiStatusAlert Type="AlertType.Success"
+                    Title="Saved!"
+                    Message="Your changes have been saved successfully."
+                    Dismissible="true"
+                    OnDismiss="() => _showAlert = false" />
+
+     <UiStatusAlert Type="AlertType.Error"
+                    Message="@_errorMessage"
+                    Visible="@_hasError" />
+*@
+
+@if (Visible)
+{
+    <div class="usa-alert usa-@TypeClass @(Inline ? "usa-inline" : "") @(Compact ? "usa-compact" : "")"
+         role="alert">
+
+        <span class="usa-icon">
+            <i class="fa-solid @IconClass"></i>
+        </span>
+
+        <div class="usa-body">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <strong class="usa-title">@Title</strong>
+            }
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <span class="usa-message">@Message</span>
+            }
+            @if (ChildContent is not null)
+            {
+                <div class="usa-custom">@ChildContent</div>
+            }
+        </div>
+
+        @if (Dismissible)
+        {
+            <button type="button" class="usa-dismiss" @onclick="Dismiss" title="Dismiss">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    public enum AlertType { Success, Error, Warning, Info }
+
+    [Parameter] public AlertType        Type         { get; set; } = AlertType.Info;
+    [Parameter] public string           Title        { get; set; } = string.Empty;
+    [Parameter] public string           Message      { get; set; } = string.Empty;
+    [Parameter] public bool             Visible      { get; set; } = true;
+    [Parameter] public bool             Dismissible  { get; set; } = false;
+    [Parameter] public bool             Inline       { get; set; } = false;
+    [Parameter] public bool             Compact      { get; set; } = false;
+    [Parameter] public RenderFragment?  ChildContent { get; set; }
+    [Parameter] public EventCallback    OnDismiss    { get; set; }
+
+    string TypeClass => Type switch
+    {
+        AlertType.Success => "success",
+        AlertType.Error   => "error",
+        AlertType.Warning => "warning",
+        _                 => "info",
+    };
+
+    string IconClass => Type switch
+    {
+        AlertType.Success => "fa-circle-check",
+        AlertType.Error   => "fa-circle-xmark",
+        AlertType.Warning => "fa-triangle-exclamation",
+        _                 => "fa-circle-info",
+    };
+
+    async Task Dismiss()
+    {
+        Visible = false;
+        await OnDismiss.InvokeAsync();
+    }
+}
+
+<style>
+    .usa-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: var(--radius, 8px);
+        border: 1px solid transparent;
+        border-left-width: 4px;
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+        font-size: 13.5px;
+        line-height: 1.55;
+        width: 100%;
+    }
+
+    /* ── Variants ── */
+    .usa-success {
+        background: rgba(4, 89, 90, .07);
+        border-color: rgba(4, 89, 90, .20);
+        border-left-color: var(--teal, #04595a);
+    }
+    .usa-success .usa-icon { color: var(--teal, #04595a); }
+
+    .usa-error {
+        background: rgba(225, 29, 72, .07);
+        border-color: rgba(225, 29, 72, .20);
+        border-left-color: #e11d48;
+    }
+    .usa-error .usa-icon { color: #e11d48; }
+
+    .usa-warning {
+        background: rgba(217, 119, 6, .07);
+        border-color: rgba(217, 119, 6, .20);
+        border-left-color: #d97706;
+    }
+    .usa-warning .usa-icon { color: #d97706; }
+
+    .usa-info {
+        background: rgba(37, 99, 235, .07);
+        border-color: rgba(37, 99, 235, .20);
+        border-left-color: #2563eb;
+    }
+    .usa-info .usa-icon { color: #2563eb; }
+
+    /* ── Icon ── */
+    .usa-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    /* ── Body ── */
+    .usa-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .usa-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--txt, #1e293b);
+        display: block;
+    }
+    .usa-message { color: var(--txt-2, #475569); }
+    .usa-custom  { color: var(--txt-2, #475569); margin-top: 4px; }
+
+    /* ── Dismiss ── */
+    .usa-dismiss {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 4px;
+        color: var(--txt-3, #94a3b8);
+        font-size: 13px;
+        flex-shrink: 0;
+        align-self: flex-start;
+        transition: color .12s, background .12s;
+    }
+    .usa-dismiss:hover { color: var(--txt, #1e293b); background: rgba(0,0,0,.06); }
+
+    /* ── Inline variant — fits alongside other content ── */
+    .usa-inline {
+        display: inline-flex;
+        width: auto;
+        padding: 6px 12px;
+        border-left-width: 1px;
+        border-radius: 20px;
+        gap: 7px;
+        font-size: 12.5px;
+    }
+    .usa-inline .usa-icon { margin-top: 0; font-size: 13px; }
+    .usa-inline .usa-body { flex-direction: row; align-items: center; gap: 4px; }
+    .usa-inline .usa-title { font-size: 12.5px; }
+
+    /* ── Compact variant — less padding ── */
+    .usa-compact { padding: 10px 14px; }
+</style>

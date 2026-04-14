@@ -282,6 +282,103 @@
         </Actions>
     </UiFormCard>
 
+    @* ══════════════════════════════════════════
+       Card 8 — Status Alerts
+    ══════════════════════════════════════════ *@
+    <UiFormCard Title="Status Alerts"
+                Description="Success, Error, Warning, Info — standard, inline, compact, dismissible."
+                Icon="fa-solid fa-circle-check">
+        <Fields>
+
+            @* Standard alerts *@
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Success"
+                           Title="Saved successfully"
+                           Message="Your profile has been updated and all changes are live." />
+
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Error"
+                           Title="Submission failed"
+                           Message="We could not process your request. Please check the fields below and try again." />
+
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Warning"
+                           Title="Action required"
+                           Message="Your session will expire in 5 minutes. Save your work to avoid losing changes." />
+
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Info"
+                           Title="Maintenance scheduled"
+                           Message="The system will be unavailable on Saturday 22 April from 02:00–04:00 UTC." />
+
+            @* Dismissible *@
+            @if (_alertVisible)
+            {
+                <UiStatusAlert Type="UiStatusAlert.AlertType.Success"
+                               Title="Dismissible alert"
+                               Message="Click the × to dismiss this alert. The OnDismiss event fires on the parent."
+                               Dismissible="true"
+                               OnDismiss="OnAlertDismissed" />
+            }
+            else
+            {
+                <div style="width:100%;">
+                    <button style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--border);
+                                   background:var(--surface-2);color:var(--txt-2);cursor:pointer;"
+                            @onclick="@(() => _alertVisible = true)">
+                        Restore dismissed alert
+                    </button>
+                </div>
+            }
+
+            @* Compact row *@
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Success"
+                           Message="Record saved."
+                           Compact="true" />
+            <UiStatusAlert Type="UiStatusAlert.AlertType.Error"
+                           Message="Validation failed."
+                           Compact="true" />
+
+            @* Inline badges *@
+            <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;align-items:center;">
+                <UiStatusAlert Type="UiStatusAlert.AlertType.Success" Message="Approved"   Inline="true" />
+                <UiStatusAlert Type="UiStatusAlert.AlertType.Error"   Message="Rejected"   Inline="true" />
+                <UiStatusAlert Type="UiStatusAlert.AlertType.Warning" Message="Pending"    Inline="true" />
+                <UiStatusAlert Type="UiStatusAlert.AlertType.Info"    Message="In review"  Inline="true" />
+            </div>
+
+            @* Dynamic alert triggered by buttons *@
+            @if (!string.IsNullOrEmpty(_dynamicMsg))
+            {
+                <UiStatusAlert Type="@_dynamicType"
+                               Title="@_dynamicTitle"
+                               Message="@_dynamicMsg"
+                               Dismissible="true"
+                               OnDismiss="@(() => _dynamicMsg = string.Empty)" />
+            }
+            <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;">
+                <span style="font-size:12px;color:var(--txt-3);align-self:center;">Trigger alerts:</span>
+                <button style="font-size:12px;padding:6px 14px;border-radius:6px;border:none;
+                               background:var(--teal);color:#fff;cursor:pointer;"
+                        @onclick="ShowSuccess">
+                    Show Success
+                </button>
+                <button style="font-size:12px;padding:6px 14px;border-radius:6px;border:none;
+                               background:#e11d48;color:#fff;cursor:pointer;"
+                        @onclick="ShowError">
+                    Show Error
+                </button>
+                <button style="font-size:12px;padding:6px 14px;border-radius:6px;border:none;
+                               background:#d97706;color:#fff;cursor:pointer;"
+                        @onclick="ShowWarning">
+                    Show Warning
+                </button>
+                <button style="font-size:12px;padding:6px 14px;border-radius:6px;border:none;
+                               background:#2563eb;color:#fff;cursor:pointer;"
+                        @onclick="ShowInfo">
+                    Show Info
+                </button>
+            </div>
+
+        </Fields>
+    </UiFormCard>
+
     @* ── Event log ── *@
     @if (_log.Any())
     {
@@ -488,6 +585,39 @@
     void OnSaveClick()    => Log("Save clicked");
     void OnCancelClick()  => Log("Cancel clicked");
     void OnDiscardClick() => Log("Discard clicked");
+
+    // ── Card 8: Status alerts ─────────────────────────────────────────────────
+    bool   _alertVisible = true;
+    string _dynamicMsg   = string.Empty;
+    string _dynamicTitle = string.Empty;
+    UiStatusAlert.AlertType _dynamicType = UiStatusAlert.AlertType.Info;
+
+    void OnAlertDismissed() => Log("Alert dismissed");
+
+    void ShowSuccess()
+    {
+        _dynamicType  = UiStatusAlert.AlertType.Success;
+        _dynamicTitle = "Operation successful";
+        _dynamicMsg   = "The record was saved and is now live in the system.";
+    }
+    void ShowError()
+    {
+        _dynamicType  = UiStatusAlert.AlertType.Error;
+        _dynamicTitle = "Operation failed";
+        _dynamicMsg   = "An unexpected error occurred. Please try again or contact support.";
+    }
+    void ShowWarning()
+    {
+        _dynamicType  = UiStatusAlert.AlertType.Warning;
+        _dynamicTitle = "Proceed with caution";
+        _dynamicMsg   = "This action is irreversible. Make sure you have a backup before continuing.";
+    }
+    void ShowInfo()
+    {
+        _dynamicType  = UiStatusAlert.AlertType.Info;
+        _dynamicTitle = "Did you know?";
+        _dynamicMsg   = "You can configure email notifications from the Security settings page.";
+    }
 
     void ResetForm()
     {
