@@ -1,0 +1,354 @@
+@* Shared/Utilities/UiCheckbox.razor *@
+@* Single checkbox or a checkbox group.
+   Use CheckboxMode.Single for one checkbox (agree, toggle, etc.)
+   Use CheckboxMode.Group  for a list of checkboxes (multi-pick).
+
+   SINGLE USAGE:
+     <UiCheckbox Label="I agree to the terms and conditions"
+                 Width="UiCheckbox.FieldWidth.Full"
+                 @bind-Checked="_agreed"
+                 OnCheckedChanged="v => _agreed = v"
+                 Required="true" />
+
+   GROUP USAGE:
+     <UiCheckbox Label="Notify me via"
+                 Mode="UiCheckbox.CheckboxMode.Group"
+                 Width="UiCheckbox.FieldWidth.Full"
+                 Options="_notifyOptions"
+                 SelectedValues="_selected"
+                 OnSelectionChanged="vals => _selected = vals"
+                 Layout="UiCheckbox.GroupLayout.Horizontal" />
+
+    GROUP VERTICAL
+    <UiCheckbox Mode="UiCheckbox.CheckboxMode.Group"
+            Layout="UiCheckbox.GroupLayout.Horizontal"
+            Options="_opts"
+            SelectedValues="_vals"
+            OnSelectionChanged="vals => _vals = vals" />    
+
+   GROUP OPTIONS:
+     List<UiCheckbox.CheckOption> _notifyOptions =
+     [
+         new() { Value = "email", Label = "Email",      Description = "Daily digest" },
+         new() { Value = "sms",   Label = "SMS",        Description = "Urgent only"  },
+         new() { Value = "push",  Label = "Push",       Disabled = true              },
+     ];
+*@
+
+<div class="ucb-wrap @WidthClass">
+
+    @* ── Group label (shown above the options) ── *@
+    @if (!string.IsNullOrEmpty(Label) && Mode == CheckboxMode.Group)
+    {
+        <span class="ucb-group-label">
+            @Label
+            @if (Required) { <span class="ucb-required">*</span> }
+        </span>
+    }
+
+    @if (Mode == CheckboxMode.Single)
+    {
+        @* ── Single checkbox ── *@
+        <label class="ucb-single @(Disabled ? "ucb-disabled" : "") @(HasError ? "ucb-single-err" : "")">
+            <input type="checkbox"
+                   id="@_id"
+                   class="ucb-native"
+                   checked="@Checked"
+                   disabled="@Disabled"
+                   @onchange="OnSingleChange" />
+            <span class="ucb-box @(Checked ? "ucb-box-on" : "")">
+                @if (Checked)
+                {
+                    <svg class="ucb-tick" viewBox="0 0 12 9" fill="none">
+                        <path d="M1 4.5L4.5 8L11 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                }
+            </span>
+            <span class="ucb-single-content">
+                <span class="ucb-single-label">
+                    @Label
+                    @if (Required) { <span class="ucb-required">*</span> }
+                </span>
+                @if (!string.IsNullOrEmpty(Description))
+                {
+                    <span class="ucb-single-desc">@Description</span>
+                }
+            </span>
+        </label>
+    }
+    else
+    {
+        @* ── Checkbox group ── *@
+        <div class="ucb-group @(Layout == GroupLayout.Horizontal ? "ucb-horizontal" : "ucb-vertical")">
+            @foreach (var opt in Options)
+            {
+                var optId   = $"{_name}-{opt.Value}";
+                var isOn    = SelectedValues.Contains(opt.Value);
+                var isDis   = Disabled || opt.Disabled;
+                <label class="ucb-option @(isOn ? "ucb-option-on" : "") @(isDis ? "ucb-disabled" : "")"
+                       for="@optId">
+                    <input type="checkbox"
+                           id="@optId"
+                           class="ucb-native"
+                           checked="@isOn"
+                           disabled="@isDis"
+                           @onchange="e => OnGroupChange(opt.Value, e)" />
+                    <span class="ucb-box @(isOn ? "ucb-box-on" : "")">
+                        @if (isOn)
+                        {
+                            <svg class="ucb-tick" viewBox="0 0 12 9" fill="none">
+                                <path d="M1 4.5L4.5 8L11 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        }
+                    </span>
+                    <span class="ucb-opt-content">
+                        <span class="ucb-opt-label">@opt.Label</span>
+                        @if (!string.IsNullOrEmpty(opt.Description))
+                        {
+                            <span class="ucb-opt-desc">@opt.Description</span>
+                        }
+                    </span>
+                </label>
+            }
+        </div>
+    }
+
+    @* ── Error / help ── *@
+    @if (HasError && !string.IsNullOrEmpty(ErrorMessage))
+    {
+        <span class="ucb-error-msg">
+            <i class="fa-solid fa-circle-exclamation"></i> @ErrorMessage
+        </span>
+    }
+    @if (!string.IsNullOrEmpty(HelpText) && !HasError)
+    {
+        <span class="ucb-help">@HelpText</span>
+    }
+
+</div>
+
+@code {
+
+    // ── Enums ─────────────────────────────────────────────────────────────────
+
+    public enum FieldWidth   { Full, Half, Third }
+    public enum CheckboxMode { Single, Group }
+    public enum GroupLayout  { Horizontal, Vertical }
+
+    // ── Option model ──────────────────────────────────────────────────────────
+
+    public sealed class CheckOption
+    {
+        public required string Value       { get; init; }
+        public required string Label       { get; init; }
+        public          string Description { get; init; } = string.Empty;
+        public          bool   Disabled    { get; init; } = false;
+    }
+
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    /// <summary>Single checkbox label, or the group heading for Mode=Group.</summary>
+    [Parameter] public string        Label       { get; set; } = string.Empty;
+
+    /// <summary>Optional description shown below the single checkbox label.</summary>
+    [Parameter] public string        Description { get; set; } = string.Empty;
+
+    [Parameter] public FieldWidth    Width       { get; set; } = FieldWidth.Full;
+    [Parameter] public CheckboxMode  Mode        { get; set; } = CheckboxMode.Single;
+    [Parameter] public GroupLayout   Layout      { get; set; } = GroupLayout.Vertical;
+
+    /// <summary>Single mode — the checked state.</summary>
+    [Parameter] public bool          Checked     { get; set; } = false;
+
+    /// <summary>Single mode — two-way binding support.</summary>
+    [Parameter] public EventCallback<bool>          CheckedChanged    { get; set; }
+
+    /// <summary>Single mode — fires when checked state changes.</summary>
+    [Parameter] public EventCallback<bool>          OnCheckedChanged  { get; set; }
+
+    /// <summary>Group mode — the option list.</summary>
+    [Parameter] public List<CheckOption> Options  { get; set; } = [];
+
+    /// <summary>Group mode — currently selected values.</summary>
+    [Parameter] public List<string>  SelectedValues   { get; set; } = [];
+
+    /// <summary>Group mode — fires when the selection changes.</summary>
+    [Parameter] public EventCallback<List<string>>   OnSelectionChanged { get; set; }
+
+    [Parameter] public bool          Required    { get; set; } = false;
+    [Parameter] public bool          Disabled    { get; set; } = false;
+    [Parameter] public bool          HasError    { get; set; } = false;
+    [Parameter] public string        ErrorMessage { get; set; } = string.Empty;
+    [Parameter] public string        HelpText    { get; set; } = string.Empty;
+
+    // ── Internals ─────────────────────────────────────────────────────────────
+
+    readonly string _id   = $"ucb-{Guid.NewGuid():N}";
+    readonly string _name = $"ucbg-{Guid.NewGuid():N}";
+
+    string WidthClass => Width switch
+    {
+        FieldWidth.Half  => "ucb-half",
+        FieldWidth.Third => "ucb-third",
+        _                => "ucb-full",
+    };
+
+    async Task OnSingleChange(ChangeEventArgs e)
+    {
+        var v = (bool)(e.Value ?? false);
+        await CheckedChanged.InvokeAsync(v);
+        await OnCheckedChanged.InvokeAsync(v);
+    }
+
+    async Task OnGroupChange(string value, ChangeEventArgs e)
+    {
+        var selected = new List<string>(SelectedValues);
+        if ((bool)(e.Value ?? false))
+        {
+            if (!selected.Contains(value)) selected.Add(value);
+        }
+        else
+        {
+            selected.Remove(value);
+        }
+        await OnSelectionChanged.InvokeAsync(selected);
+    }
+}
+
+<style>
+    .ucb-wrap  { display: flex; flex-direction: column; gap: 6px; }
+    .ucb-full  { width: 100%; }
+    .ucb-half  { width: calc(50% - 8px); }
+    .ucb-third { width: calc(33.333% - 11px); }
+
+    /* ── Group heading ── */
+    .ucb-group-label {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--txt-2, #475569);
+        letter-spacing: .1px;
+    }
+    .ucb-required { color: var(--accent, #c81766); margin-left: 2px; }
+
+    /* ── Hide native input ── */
+    .ucb-native { display: none; }
+
+    /* ── Custom checkbox box ── */
+    .ucb-box {
+        width: 17px;
+        height: 17px;
+        flex-shrink: 0;
+        border-radius: 4px;
+        border: 1.5px solid var(--border-2, #cbd5e1);
+        background: var(--surface, #fff);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+        margin-top: 1px;
+    }
+    .ucb-box-on {
+        background: var(--accent, #c81766);
+        border-color: var(--accent, #c81766);
+    }
+    .ucb-tick {
+        width: 11px;
+        height: 9px;
+        flex-shrink: 0;
+    }
+
+    /* ── Single checkbox ── */
+    .ucb-single {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+        padding: 10px 14px;
+        border-radius: var(--radius, 8px);
+        border: 1.5px solid var(--border, #e2e8f0);
+        background: var(--surface, #fff);
+        transition: border-color .15s, background .15s;
+    }
+    .ucb-single:hover:not(.ucb-disabled) {
+        border-color: var(--accent, #c81766);
+        background: var(--accent-faint, rgba(200,23,102,.04));
+    }
+    .ucb-single:hover:not(.ucb-disabled) .ucb-box {
+        border-color: var(--accent, #c81766);
+        box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
+    }
+    .ucb-single-err { border-color: #e11d48; }
+
+    .ucb-single-content {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+    }
+    .ucb-single-label {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--txt, #1e293b);
+        line-height: 1.4;
+    }
+    .ucb-single-desc {
+        font-size: 12px;
+        color: var(--txt-3, #94a3b8);
+        line-height: 1.4;
+    }
+
+    /* ── Group ── */
+    .ucb-group { display: flex; flex-wrap: wrap; }
+    .ucb-vertical   { flex-direction: column; gap: 6px; }
+    .ucb-horizontal { flex-direction: row;    gap: 8px; }
+
+    .ucb-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+        padding: 9px 14px;
+        border-radius: var(--radius, 8px);
+        border: 1.5px solid var(--border, #e2e8f0);
+        background: var(--surface, #fff);
+        transition: border-color .15s, background .15s;
+    }
+    .ucb-option:hover:not(.ucb-disabled) {
+        border-color: var(--accent, #c81766);
+        background: var(--accent-faint, rgba(200,23,102,.04));
+    }
+    .ucb-option:hover:not(.ucb-disabled) .ucb-box {
+        border-color: var(--accent, #c81766);
+        box-shadow: 0 0 0 3px var(--accent-faint, rgba(200,23,102,.12));
+    }
+    .ucb-option-on {
+        border-color: var(--accent, #c81766);
+        background: var(--accent-faint, rgba(200,23,102,.07));
+    }
+
+    .ucb-opt-content { display: flex; flex-direction: column; gap: 1px; }
+    .ucb-opt-label   { font-size: 13.5px; font-weight: 500; color: var(--txt, #1e293b); }
+    .ucb-opt-desc    { font-size: 12px;   color: var(--txt-3, #94a3b8); line-height: 1.4; }
+
+    /* ── Disabled ── */
+    .ucb-disabled { opacity: .5; cursor: not-allowed; pointer-events: none; }
+
+    /* ── Error / help ── */
+    .ucb-error-msg {
+        font-size: 11.5px;
+        color: #e11d48;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .ucb-help {
+        font-size: 11.5px;
+        color: var(--txt-3, #94a3b8);
+        line-height: 1.4;
+    }
+
+    @@media (max-width: 640px) {
+        .ucb-half, .ucb-third { width: 100%; }
+        .ucb-horizontal { flex-direction: column; }
+    }
+</style>

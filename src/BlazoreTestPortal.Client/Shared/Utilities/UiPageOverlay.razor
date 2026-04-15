@@ -1,0 +1,258 @@
+@* Shared/Utilities/UiPageOverlay.razor *@
+@* Full-page loading overlay for page load and API calls.
+   Renders a fixed overlay covering the entire viewport with a
+   centred spinner, message, and optional progress bar.
+
+   USAGE — page load:
+     // In your page component 
+     <UiPageOverlay Visible="@_loading" Message="Loading records…" />
+
+   USAGE — API call:
+     <UiPageOverlay Visible="@_saving"
+                    Message="Saving changes…"
+                    Spinner="UiPageOverlay.SpinnerStyle.Dots" />
+
+   USAGE — with progress:
+     <UiPageOverlay Visible="@_uploading"
+                    Message="Uploading files…"
+                    ShowProgress="true"
+                    Progress="@_pct" />
+
+   USAGE — opaque (blocks all interaction, no see-through):
+     <UiPageOverlay Visible="@_loading"
+                    Opaque="true"
+                    Message="Please wait…" />
+
+   NOTE: Place it as the FIRST element inside your page div so it
+         renders on top of everything else within the stacking context.
+         The component is position:fixed so it always covers the viewport.
+*@
+
+@if (Visible)
+{
+    <div class="upo-overlay @(Opaque ? "upo-opaque" : "upo-glass")" role="status" aria-live="polite" aria-label="@Message">
+        <div class="upo-card">
+
+            @* ── Spinner ── *@
+            @if (Spinner == SpinnerStyle.Ring)
+            {
+                <div class="upo-ring"></div>
+            }
+            else if (Spinner == SpinnerStyle.Pulse)
+            {
+                <div class="upo-pulse">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+            }
+            else if (Spinner == SpinnerStyle.Dots)
+            {
+                <div class="upo-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            }
+            else if (Spinner == SpinnerStyle.Bar)
+            {
+                <div class="upo-bar-track">
+                    <div class="upo-bar-fill"></div>
+                </div>
+            }
+
+            @* ── Message ── *@
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <p class="upo-message">@Message</p>
+            }
+
+            @* ── Progress ── *@
+            @if (ShowProgress)
+            {
+                <div class="upo-progress-track">
+                    <div class="upo-progress-fill" style="width:@(Math.Clamp(Progress, 0, 100))%"></div>
+                </div>
+                <span class="upo-progress-label">@Math.Clamp(Progress, 0, 100)%</span>
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+
+    public enum SpinnerStyle
+    {
+        /// <summary>Classic spinning ring — best for general loading.</summary>
+        Ring,
+        /// <summary>Expanding concentric pulse rings — good for sync operations.</summary>
+        Pulse,
+        /// <summary>Three bouncing dots — good for chat / content streaming.</summary>
+        Dots,
+        /// <summary>Horizontal shimmer bar — good for page-level navigation.</summary>
+        Bar,
+    }
+
+    /// <summary>Controls whether the overlay is shown.</summary>
+    [Parameter] public bool         Visible      { get; set; } = false;
+
+    /// <summary>Text shown below the spinner.</summary>
+    [Parameter] public string       Message      { get; set; } = "Loading…";
+
+    /// <summary>Which spinner animation to use. Default: Ring.</summary>
+    [Parameter] public SpinnerStyle Spinner      { get; set; } = SpinnerStyle.Ring;
+
+    /// <summary>
+    /// true  = solid white background — nothing shows through.
+    /// false = frosted-glass effect (default).
+    /// </summary>
+    [Parameter] public bool         Opaque       { get; set; } = false;
+
+    /// <summary>Show a progress bar below the message.</summary>
+    [Parameter] public bool         ShowProgress { get; set; } = false;
+
+    /// <summary>Progress value 0–100. Only used when ShowProgress=true.</summary>
+    [Parameter] public int          Progress     { get; set; } = 0;
+}
+
+<style>
+    /* ── Overlay base ── */
+    .upo-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .upo-glass {
+        background: rgba(255, 255, 255, .82);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+    }
+
+    .upo-opaque {
+        background: var(--surface, #ffffff);
+    }
+
+    /* ── Centre card ── */
+    .upo-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 40px 48px;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e2e8f0);
+        border-radius: var(--radius-lg, 14px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, .10);
+        min-width: 200px;
+        max-width: 320px;
+        text-align: center;
+    }
+
+    /* ── Ring spinner ── */
+    .upo-ring {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        border: 4px solid var(--border, #e2e8f0);
+        border-top-color: var(--accent, #c81766);
+        animation: upo-spin .75s linear infinite;
+        flex-shrink: 0;
+    }
+    @@keyframes upo-spin { to { transform: rotate(360deg); } }
+
+    /* ── Pulse rings ── */
+    .upo-pulse {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        flex-shrink: 0;
+    }
+    .upo-pulse span {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid var(--accent, #c81766);
+        opacity: 0;
+        animation: upo-pulse 1.4s cubic-bezier(.215, .61, .355, 1) infinite;
+    }
+    .upo-pulse span:nth-child(2) { animation-delay: .35s; }
+    .upo-pulse span:nth-child(3) { animation-delay: .70s; }
+    .upo-pulse span:nth-child(4) { animation-delay: 1.05s; }
+    @@keyframes upo-pulse {
+        0%   { transform: scale(.2); opacity: .9; }
+        80%  { transform: scale(1.1); opacity: 0; }
+        100% { opacity: 0; }
+    }
+
+    /* ── Bouncing dots ── */
+    .upo-dots {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .upo-dots span {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--accent, #c81766);
+        animation: upo-bounce 1.2s ease-in-out infinite;
+    }
+    .upo-dots span:nth-child(2) { animation-delay: .2s; }
+    .upo-dots span:nth-child(3) { animation-delay: .4s; }
+    @@keyframes upo-bounce {
+        0%, 80%, 100% { transform: scale(.55); opacity: .4; }
+        40%            { transform: scale(1);   opacity: 1; }
+    }
+
+    /* ── Shimmer bar ── */
+    .upo-bar-track {
+        width: 160px;
+        height: 4px;
+        border-radius: 4px;
+        background: var(--border, #e2e8f0);
+        overflow: hidden;
+    }
+    .upo-bar-fill {
+        height: 100%;
+        width: 40%;
+        border-radius: 4px;
+        background: var(--accent, #c81766);
+        animation: upo-shimmer 1.4s ease-in-out infinite;
+    }
+    @@keyframes upo-shimmer {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(400%); }
+    }
+
+    /* ── Message ── */
+    .upo-message {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--txt-2, #475569);
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    /* ── Progress bar ── */
+    .upo-progress-track {
+        width: 180px;
+        height: 6px;
+        border-radius: 6px;
+        background: var(--border, #e2e8f0);
+        overflow: hidden;
+    }
+    .upo-progress-fill {
+        height: 100%;
+        border-radius: 6px;
+        background: linear-gradient(90deg, var(--accent, #c81766), var(--teal, #04595a));
+        transition: width .25s ease;
+    }
+    .upo-progress-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent, #c81766);
+        font-family: var(--font, 'Plus Jakarta Sans', system-ui, sans-serif);
+    }
+</style>
